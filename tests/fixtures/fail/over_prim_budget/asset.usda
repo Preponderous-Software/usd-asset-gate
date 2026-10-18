@@ -1,0 +1,113 @@
+#usda 1.0
+(
+    defaultPrim = "Props"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+# 1 root + 100 children = 101 prims, one over a max_prims: 100 budget.
+def Xform "Props" (
+    kind = "group"
+)
+{
+    def Xform "Prop001" {}
+    def Xform "Prop002" {}
+    def Xform "Prop003" {}
+    def Xform "Prop004" {}
+    def Xform "Prop005" {}
+    def Xform "Prop006" {}
+    def Xform "Prop007" {}
+    def Xform "Prop008" {}
+    def Xform "Prop009" {}
+    def Xform "Prop010" {}
+    def Xform "Prop011" {}
+    def Xform "Prop012" {}
+    def Xform "Prop013" {}
+    def Xform "Prop014" {}
+    def Xform "Prop015" {}
+    def Xform "Prop016" {}
+    def Xform "Prop017" {}
+    def Xform "Prop018" {}
+    def Xform "Prop019" {}
+    def Xform "Prop020" {}
+    def Xform "Prop021" {}
+    def Xform "Prop022" {}
+    def Xform "Prop023" {}
+    def Xform "Prop024" {}
+    def Xform "Prop025" {}
+    def Xform "Prop026" {}
+    def Xform "Prop027" {}
+    def Xform "Prop028" {}
+    def Xform "Prop029" {}
+    def Xform "Prop030" {}
+    def Xform "Prop031" {}
+    def Xform "Prop032" {}
+    def Xform "Prop033" {}
+    def Xform "Prop034" {}
+    def Xform "Prop035" {}
+    def Xform "Prop036" {}
+    def Xform "Prop037" {}
+    def Xform "Prop038" {}
+    def Xform "Prop039" {}
+    def Xform "Prop040" {}
+    def Xform "Prop041" {}
+    def Xform "Prop042" {}
+    def Xform "Prop043" {}
+    def Xform "Prop044" {}
+    def Xform "Prop045" {}
+    def Xform "Prop046" {}
+    def Xform "Prop047" {}
+    def Xform "Prop048" {}
+    def Xform "Prop049" {}
+    def Xform "Prop050" {}
+    def Xform "Prop051" {}
+    def Xform "Prop052" {}
+    def Xform "Prop053" {}
+    def Xform "Prop054" {}
+    def Xform "Prop055" {}
+    def Xform "Prop056" {}
+    def Xform "Prop057" {}
+    def Xform "Prop058" {}
+    def Xform "Prop059" {}
+    def Xform "Prop060" {}
+    def Xform "Prop061" {}
+    def Xform "Prop062" {}
+    def Xform "Prop063" {}
+    def Xform "Prop064" {}
+    def Xform "Prop065" {}
+    def Xform "Prop066" {}
+    def Xform "Prop067" {}
+    def Xform "Prop068" {}
+    def Xform "Prop069" {}
+    def Xform "Prop070" {}
+    def Xform "Prop071" {}
+    def Xform "Prop072" {}
+    def Xform "Prop073" {}
+    def Xform "Prop074" {}
+    def Xform "Prop075" {}
+    def Xform "Prop076" {}
+    def Xform "Prop077" {}
+    def Xform "Prop078" {}
+    def Xform "Prop079" {}
+    def Xform "Prop080" {}
+    def Xform "Prop081" {}
+    def Xform "Prop082" {}
+    def Xform "Prop083" {}
+    def Xform "Prop084" {}
+    def Xform "Prop085" {}
+    def Xform "Prop086" {}
+    def Xform "Prop087" {}
+    def Xform "Prop088" {}
+    def Xform "Prop089" {}
+    def Xform "Prop090" {}
+    def Xform "Prop091" {}
+    def Xform "Prop092" {}
+    def Xform "Prop093" {}
+    def Xform "Prop094" {}
+    def Xform "Prop095" {}
+    def Xform "Prop096" {}
+    def Xform "Prop097" {}
+    def Xform "Prop098" {}
+    def Xform "Prop099" {}
+    def Xform "Prop100" {}
+}

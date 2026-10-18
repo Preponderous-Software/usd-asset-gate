@@ -1,0 +1,6 @@
+{
+  "description": "One of four crate models is instanced (ratio 0.25) against min_instance_ratio: 0.5.",
+  "findings": [
+    {"rule": "instance-budget", "code": "InstanceRatioTooLow"}
+  ]
+}
