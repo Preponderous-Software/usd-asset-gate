@@ -57,13 +57,40 @@ def build_parser() -> argparse.ArgumentParser:
     config_help = "config file (default: .usd-asset-gate.yml in the working directory, if any)"
 
     check = sub.add_parser("check", help="check USD files and directories")
-    check.add_argument("paths", nargs="*", metavar="PATH", help="files or directories to check")
+    check.add_argument(
+        "paths",
+        nargs="*",
+        metavar="PATH",
+        help="files or directories to check (with --changed-since: limit to these)",
+    )
     check.add_argument("--config", metavar="FILE", help=config_help)
     check.add_argument(
+        "--changed-since",
+        metavar="REF",
+        help="check only USD files changed between REF and HEAD (git diff REF...HEAD; "
+        "deleted files are skipped)",
+    )
+    check.add_argument(
         "--format",
-        choices=("text", "json"),
+        choices=("text", "json", "github"),
         default="text",
-        help="output format on stdout (default: text)",
+        help="output format on stdout (default: text). github prints workflow-command "
+        "annotations followed by the text report",
+    )
+    check.add_argument(
+        "--json", metavar="FILE", dest="json_file", help="also write the JSON report to FILE"
+    )
+    check.add_argument(
+        "--summary",
+        metavar="FILE",
+        help="append a Markdown summary to FILE (e.g. $GITHUB_STEP_SUMMARY)",
+    )
+    check.add_argument(
+        "--max-annotations",
+        type=int,
+        default=None,
+        metavar="N",
+        help="with --format github, annotate at most N findings per severity (default 10)",
     )
     check.add_argument(
         "--fail-on",
@@ -127,17 +154,44 @@ def cmd_check(args: argparse.Namespace) -> int:
     from .report import text as text_report
     from .runner import Runner
 
+    from .discovery import changed_files, filter_paths, under_any
+    from .report import github as github_report
+    from .report import summary as summary_report
+
     config = load_config(args.config)
-    if not args.paths:
-        raise UsageError("no paths given (pass files or directories to check)")
-    files = discover(args.paths, config)
+    if args.changed_since:
+        try:
+            changed = changed_files(args.changed_since)
+            if args.paths:
+                for p in args.paths:
+                    if not os.path.exists(p):
+                        raise DiscoveryError(f"no such file or directory: {p}")
+                changed = [c for c in changed if under_any(c, args.paths)]
+        except DiscoveryError as exc:
+            raise UsageError(str(exc)) from None
+        files = filter_paths(changed, config.include, config.exclude)
+    elif not args.paths:
+        raise UsageError("no paths given (pass files or directories, or --changed-since REF)")
+    else:
+        files = discover(args.paths, config)
     report = Runner(config).run(files, fail_on=args.fail_on)
     if args.verbose:
         for path, lines in report.diagnostics.items():
             for line in lines:
                 sys.stderr.write(f"{path}: openusd: {line}\n")
+    if args.json_file:
+        with open(args.json_file, "w", encoding="utf-8") as fh:
+            fh.write(json_report.render(report))
+    if args.summary:
+        summary_report.append_to(args.summary, summary_report.render(report))
     if args.format == "json":
         sys.stdout.write(json_report.render(report))
+    elif args.format == "github":
+        limit = args.max_annotations
+        if limit is None:
+            limit = github_report.DEFAULT_MAX_PER_SEVERITY
+        sys.stdout.write(github_report.render(report, max_per_severity=limit))
+        sys.stdout.write(github_report.guarded(text_report.render(report)))
     else:
         sys.stdout.write(text_report.render(report, colour=text_report.use_colour(sys.stdout)))
     return report.exit_code

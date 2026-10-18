@@ -115,3 +115,112 @@ def open_stage(ctx: AssetContext) -> list[str]:
         return [f"Usd.Stage.Open returned no stage for {ctx.path}"]
     ctx.stage = stage
     return []
+
+
+_PRIM_HEADER_RE = re.compile(r'[ \t]*(?:def|over|class)\b[^"\n]*"([^"\n]+)"')
+_TRIPLE_QUOTES = ('"' * 3, "'" * 3)
+
+
+def _scan_usda(text: str):
+    """Prim headers and braces outside strings, comments and metadata parentheses.
+
+    Returns ``(headers, braces)``: ``headers`` is a list of ``(pos, name, depth)``
+    for ``def``/``over``/``class`` lines at the start of a line, and ``braces`` a
+    list of ``(pos, char, depth_inside)`` for ``{``/``}`` at parenthesis depth 0,
+    where ``depth_inside`` is the brace depth of the block the brace opens or closes.
+    """
+    headers, braces = [], []
+    depth = paren = 0
+    i, n = 0, len(text)
+    line_start = True
+    while i < n:
+        if line_start and paren == 0:
+            m = _PRIM_HEADER_RE.match(text, i)
+            if m:
+                headers.append((i, m.group(1), depth))
+        line_start = False
+        c = text[i]
+        if c == "\n":
+            line_start = True
+            i += 1
+        elif c == "#":
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+        elif text[i : i + 3] in _TRIPLE_QUOTES:
+            j = text.find(text[i : i + 3], i + 3)
+            i = n if j < 0 else j + 3
+        elif c in "\"'":
+            j = i + 1
+            while j < n and text[j] != c and text[j] != "\n":
+                j += 2 if text[j] == "\\" else 1
+            i = j + 1
+        elif c == "@":
+            j = text.find("@", i + 1)
+            i = n if j < 0 else j + 1
+        elif c in "([":
+            paren += 1
+            i += 1
+        elif c in ")]":
+            paren = max(0, paren - 1)
+            i += 1
+        elif c == "{":
+            depth += 1
+            if paren == 0:
+                braces.append((i, c, depth))
+            i += 1
+        elif c == "}":
+            if paren == 0:
+                braces.append((i, c, depth))
+            depth = max(0, depth - 1)
+            i += 1
+        else:
+            i += 1
+    return headers, braces
+
+
+def usda_prim_line(text: str, prim_path: str) -> int | None:
+    """Best-effort 1-based line of the spec that introduces ``prim_path`` in usda text.
+
+    Follows the prim hierarchy: each path component must be a direct child (one
+    brace level deeper, inside the parent's body) of the previous one. Property
+    paths use their prim. Returns None whenever the hierarchy cannot be
+    established, for example when the prim is defined in another layer.
+    """
+    names = [n for n in prim_path.split(".", 1)[0].split("/") if n]
+    if not names:
+        return None
+    headers, braces = _scan_usda(text)
+    lo, hi, depth = 0, len(text), 0
+    found = None
+    for index, name in enumerate(names):
+        found = next(
+            (h for h in headers if lo <= h[0] < hi and h[2] == depth and h[1] == name), None
+        )
+        if found is None:
+            return None
+        if index == len(names) - 1:
+            break
+        # The prim's body: the first "{" opening depth + 1 after the header, up to
+        # the "}" that closes that same depth.
+        body = next(
+            (b for b in braces if b[0] > found[0] and b[1] == "{" and b[2] == depth + 1), None
+        )
+        if body is None or body[0] >= hi:
+            return None
+        close = next(
+            (b for b in braces if b[0] > body[0] and b[1] == "}" and b[2] == depth + 1), None
+        )
+        lo, hi, depth = body[0] + 1, (close[0] if close else len(text)), depth + 1
+    return text.count("\n", 0, found[0]) + 1
+
+
+def read_usda_text(abs_path: str) -> str | None:
+    """The file's text if it is a usda text layer (by header), else None."""
+    try:
+        with open(abs_path, "rb") as fh:
+            head = fh.read(8)
+            if not head.startswith(b"#usda"):
+                return None
+            return (head + fh.read()).decode("utf-8", errors="replace")
+    except OSError:
+        return None

@@ -7,10 +7,33 @@ import os
 from .config import Config
 from .model import Finding, Report, Severity, severity_of, sort_findings
 from .rules import registry, upstream
-from .stage import AssetContext, normalize_diagnostic, open_stage
+from .stage import (
+    AssetContext,
+    normalize_diagnostic,
+    open_stage,
+    read_usda_text,
+    usda_prim_line,
+)
 
 #: Rule ID reported when a file cannot be opened as a USD stage at all.
 STAGE_OPEN_RULE = "stage-open"
+
+
+def add_line_numbers(ctx: AssetContext, findings: list[Finding]) -> list[Finding]:
+    """Fill ``line`` for findings on prims of a usda root layer (best effort)."""
+    if not any(f.prim_path and not f.layer and f.line is None for f in findings):
+        return findings
+    text = read_usda_text(ctx.abs_path)
+    if text is None:
+        return findings
+    out = []
+    for f in findings:
+        if f.prim_path and not f.layer and f.line is None:
+            line = usda_prim_line(text, f.prim_path)
+            if line is not None:
+                f = Finding(**{**f.to_dict(), "severity": f.severity, "line": line})
+        out.append(f)
+    return out
 
 
 class Runner:
@@ -94,7 +117,7 @@ class Runner:
         for spec in enabled:
             if spec.check:
                 findings.extend(spec.check(ctx, settings[spec.id]))
-        return ctx, findings
+        return ctx, add_line_numbers(ctx, findings)
 
     def run(self, files: list[str], fail_on: str | None = None) -> Report:
         findings: list[Finding] = []
