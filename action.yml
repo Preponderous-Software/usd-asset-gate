@@ -1,0 +1,59 @@
+# usd-asset-gate composite action.
+#
+# Runs OpenUSD's validators and your house rules on the USD files a pull request
+# changed. It uses no other actions — only bash and pip — so pinning this action by
+# commit SHA pins everything it runs. It expects the repository to be checked out
+# with enough history to reach the pull request's base commit (fetch-depth: 0, or
+# the plain-git checkout shown in the README).
+name: usd-asset-gate
+description: CI quality gate for OpenUSD assets — upstream validators, house rules, annotations, job summary and one PR comment.
+author: Daniel McCoy Stephenson
+branding:
+  icon: box
+  color: blue
+
+inputs:
+  config:
+    description: Config file path. Default is .usd-asset-gate.yml when present.
+    required: false
+    default: ""
+  usd-core-version:
+    description: usd-core version to install from PyPI.
+    required: false
+    default: "26.8"
+  paths:
+    description: Space-separated files or directories to check. With a pull request, they narrow the changed files; without one, they are checked in full. Default is the changed files, or the whole repository outside a pull request.
+    required: false
+    default: ""
+  comment:
+    description: Create or update the single PR comment ("true" or "false").
+    required: false
+    default: "true"
+  fail-on:
+    description: Lowest severity that fails the check (error, warning, info, never). Default comes from the config, else error.
+    required: false
+    default: ""
+  base-sha:
+    description: Base commit for changed-file discovery. Default is the pull request's base SHA.
+    required: false
+    default: ""
+  github-token:
+    description: Token for fetching the base commit and writing the PR comment.
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: USD asset gate
+      shell: bash
+      env:
+        BASE_SHA: ${{ inputs.base-sha || github.event.pull_request.base.sha }}
+        USD_ASSET_GATE_PATHS: ${{ inputs.paths }}
+        USD_ASSET_GATE_CONFIG: ${{ inputs.config }}
+        USD_ASSET_GATE_FAIL_ON: ${{ inputs.fail-on }}
+        USD_ASSET_GATE_COMMENT: ${{ inputs.comment }}
+        USD_CORE_VERSION: ${{ inputs.usd-core-version }}
+        USD_ASSET_GATE_SPEC: ${{ github.action_path }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: bash "$GITHUB_ACTION_PATH/ci/usd-asset-gate.sh"

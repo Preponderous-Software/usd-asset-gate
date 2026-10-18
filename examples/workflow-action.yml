@@ -1,0 +1,30 @@
+# Composite-action mode.
+#
+# Save as .github/workflows/usd-asset-gate.yml. Pin the action to a full commit
+# SHA: the action runs only bash and pip, so the SHA pins everything it executes.
+# Triggered by pull_request, never pull_request_target (fork PRs get no comment;
+# results stay in the log, annotations and job summary).
+name: USD asset gate
+
+on:
+  pull_request:
+    paths: ["**/*.usd", "**/*.usda", "**/*.usdc", "**/*.usdz", ".usd-asset-gate.yml"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  usd-gate:
+    runs-on: ubuntu-24.04
+    steps:
+      # Any checkout that reaches the PR's base commit works: this one, or the
+      # plain-git step from examples/workflow-local-only.yml.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: Preponderous-Software/usd-asset-gate@<full-commit-sha>
+        with:
+          config: .usd-asset-gate.yml
+          usd-core-version: "26.8"
+          comment: true

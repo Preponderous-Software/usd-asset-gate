@@ -1,0 +1,105 @@
+# Dogfood: this repository runs its own gate exactly the way a local-only consumer
+# would (examples/workflow-local-only.yml), with no `uses:` lines at all, plus the
+# composite action from this checkout.
+name: USD asset gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: usd-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-only:
+    name: local-only mode (dogfood)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      # Install the package from this checkout instead of a released version.
+      USD_ASSET_GATE_SPEC: .
+    steps:
+      - name: Checkout (plain git)
+        env:
+          TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git init -q .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)" \
+            fetch -q --no-tags origin ${BASE:+"$BASE"} "${GITHUB_SHA}"
+          git checkout -q --detach "${GITHUB_SHA}"
+
+      - name: USD asset gate on the changed files (the consumer path, with PR comment)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash ci/usd-asset-gate.sh
+
+      - name: Build the binary fixtures (.usdc / .usdz)
+        run: '"$RUNNER_TEMP/usd-asset-gate-venv/bin/python" tests/fixtures/build.py'
+
+      - name: Every expected-pass fixture passes
+        env:
+          USD_ASSET_GATE_PATHS: tests/fixtures/pass
+          USD_ASSET_GATE_COMMENT: "false"
+        run: bash ci/usd-asset-gate.sh
+
+      - name: Every expected-fail fixture fails
+        run: |
+          failed=0
+          for case in tests/fixtures/fail/*/; do
+            config="$case.usd-asset-gate.yml"
+            [ -f "$config" ] || config=tests/fixtures/default-config.yml
+            set +e
+            USD_ASSET_GATE_PATHS="$case" USD_ASSET_GATE_CONFIG="$config" \
+              USD_ASSET_GATE_COMMENT=false GITHUB_STEP_SUMMARY= \
+              bash ci/usd-asset-gate.sh > "$RUNNER_TEMP/case.log" 2>&1
+            status=$?
+            set -e
+            if [ "$status" -eq 1 ]; then
+              echo "ok   $case (exit 1)"
+            else
+              echo "FAIL $case exited $status, expected 1"; cat "$RUNNER_TEMP/case.log"; failed=1
+            fi
+          done
+          exit "$failed"
+
+      - name: The token was never persisted to .git/config
+        run: |
+          if git config --get-all http.https://github.com/.extraheader; then
+            echo "::error::http.extraheader is present in .git/config"; exit 1
+          fi
+          if git config --get-all http.extraheader; then
+            echo "::error::http.extraheader is present in .git/config"; exit 1
+          fi
+          echo "no extraheader in .git/config"
+
+  composite-action:
+    name: composite action (from this checkout)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout (plain git)
+        env:
+          TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git init -q .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)" \
+            fetch -q --no-tags origin ${BASE:+"$BASE"} "${GITHUB_SHA}"
+          git checkout -q --detach "${GITHUB_SHA}"
+
+      # A local action path, not a third-party action: it runs this checkout's action.yml.
+      - name: USD asset gate (composite action)
+        uses: ./
+        with:
+          paths: tests/fixtures/pass
+          comment: "false"

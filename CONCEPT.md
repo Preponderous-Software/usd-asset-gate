@@ -1,6 +1,6 @@
 # usd-asset-gate — Concept
 
-> Status: planning. Nothing here is implemented yet. Facts about OpenUSD and other tools
+> Status: the MVP is implemented; see [MVP.md](MVP.md). Facts about OpenUSD and other tools
 > below were checked on 2026-10-17 against the sources linked next to them.
 
 ## The problem

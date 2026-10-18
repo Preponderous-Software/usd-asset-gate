@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 
-from conftest import FAIL_DIR, PASS_DIR, REPO_ROOT, run_cli
+from conftest import DEFAULT_CONFIG, FAIL_DIR, PASS_DIR, REPO_ROOT, run_cli
+
+DEFAULTS = ("--config", str(DEFAULT_CONFIG))
 
 VALID = str(PASS_DIR / "minimal.usda")
 BROKEN = str(FAIL_DIR / "unparseable" / "asset.usda")
@@ -17,7 +19,7 @@ def test_help_lists_subcommands():
 
 
 def test_check_valid_file_exits_0(cli):
-    code, out, _ = cli("check", VALID)
+    code, out, _ = cli("check", *DEFAULTS, VALID)
     assert code == 0
     assert out.strip().endswith("(fail_on: error)")
     assert out.startswith("PASS: 1 file checked")
@@ -36,7 +38,7 @@ def test_fail_on_never_exits_0_even_with_errors(cli):
 
 
 def test_json_output_has_documented_top_level_shape(cli):
-    code, out, _ = cli("check", "--format", "json", VALID, BROKEN)
+    code, out, _ = cli("check", *DEFAULTS, "--format", "json", VALID, BROKEN)
     assert code == 1
     data = json.loads(out)
     assert set(data) == {"version", "tool", "files", "findings", "summary"}
