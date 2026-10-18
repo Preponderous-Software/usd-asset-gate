@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 import re
 import sys
@@ -168,11 +169,13 @@ def validate(value: Any, schema: dict, path: str = "") -> None:
             ]
             if same_type:
                 raise ConfigError(same_type[0])
-            raise ConfigError(f"{where}: {json.dumps(value)} is not a valid value")
+            raise ConfigError(f"{where}: {_show(value)} is not a valid value")
         return
     expected = schema.get("type")
     if expected and not _type_ok(value, expected):
         raise ConfigError(f"{where}: expected {expected}, got {_type_name(value)}")
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ConfigError(f"{where}: must be a finite number, got {value}")
     if "enum" in schema and value not in schema["enum"]:
         options = ", ".join(_show(v) for v in schema["enum"])
         raise ConfigError(f"{where}: {_show(value)} is not one of {options}")

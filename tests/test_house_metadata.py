@@ -111,6 +111,8 @@ def test_missing_default_prim_is_not_reported_twice():
         ("2GiB", 2 * 1024**3),
         ("1.5 MiB", int(1.5 * 1024**2)),
         ("3kb", 3000),
+        ("1.001MB", 1_001_000),
+        ("4.1MB", 4_100_000),
     ],
 )
 def test_parse_size(value, expected):
@@ -169,6 +171,9 @@ def test_size_exactly_at_limit_passes(tmp_path):
         ({"stage-metadata": {"upAxis": "X"}}, "rules.stage-metadata.upAxis"),
         ({"stage-metadata": {"metersPerUnit": "cm"}}, "rules.stage-metadata.metersPerUnit: expected number"),
         ({"default-prim": {"kind": 3}}, "rules.default-prim.kind: expected string"),
+        ({"stage-metadata": {"metersPerUnit": float("nan")}}, "rules.stage-metadata.metersPerUnit: must be a finite number"),
+        ({"stage-metadata": {"tolerance": float("nan")}}, "rules.stage-metadata.tolerance: must be a finite number"),
+        ({"stage-metadata": {"metersPerUnit": float("inf")}}, "rules.stage-metadata.metersPerUnit: must be a finite number"),
     ],
 )
 def test_invalid_house_settings_name_the_key(rules, key):
@@ -176,3 +181,25 @@ def test_invalid_house_settings_name_the_key(rules, key):
         cfg.parse({"rules": rules})
     assert key in str(exc.value)
 
+
+
+def test_fractional_size_limit_boundary(tmp_path):
+    f = tmp_path / "x.usda"
+    f.write_bytes(b"#" * 1_001_000)
+    ctx = AssetContext(path="x.usda", abs_path=str(f))
+    assert file_size.check_before_open(ctx, {"max_bytes": "1.001MB"}) == []
+
+
+def test_date_valued_size_is_a_config_error():
+    import datetime
+
+    with pytest.raises(cfg.ConfigError, match="rules.file-size.max_bytes"):
+        cfg.parse({"rules": {"file-size": {"max_bytes": datetime.date(2026, 10, 18)}}})
+
+
+def test_dangling_symlink_is_reported_as_stage_open_failure(tmp_path, monkeypatch):
+    (tmp_path / "gone.usda").symlink_to(tmp_path / "missing-target.usda")
+    monkeypatch.chdir(tmp_path)
+    config = cfg.parse({"rules": {"file-size": {"max_bytes": "1MB"}}})
+    report = Runner(config).run(["gone.usda"])
+    assert [(f.rule, f.code) for f in report.findings] == [("stage-open", "StageOpenFailed")]

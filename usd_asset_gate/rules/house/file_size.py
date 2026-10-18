@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+from decimal import Decimal
 
 from ...model import Finding, Severity, severity_of
 
@@ -32,7 +33,8 @@ def parse_size(value) -> int:
     m = _SIZE_RE.match(str(value))
     if not m:
         raise ValueError(f"not a size: {value!r} (use bytes or e.g. 50MB, 2GiB)")
-    return int(float(m.group(1)) * UNITS[m.group(2).upper()])
+    # Decimal keeps "1.001MB" at exactly 1,001,000 bytes (a float would lose one).
+    return int(Decimal(m.group(1)) * UNITS[m.group(2).upper()])
 
 
 def human(n: int) -> str:
@@ -56,7 +58,10 @@ def check_before_open(ctx, settings: dict) -> list[Finding]:
     limit = limit_for(ctx.path, settings.get("max_bytes"))
     if limit is None:
         return []
-    size = os.stat(ctx.abs_path).st_size
+    try:
+        size = os.stat(ctx.abs_path).st_size
+    except OSError:
+        return []  # e.g. a dangling symlink: opening the stage reports it as StageOpenFailed
     if size <= limit:
         return []
     return [
