@@ -76,12 +76,16 @@ Each milestone is one GitHub issue (label `mvp`). Order is the intended build or
 
 ### M1 — Project skeleton, CLI and finding model
 
+Issue: #1
+
 `pyproject.toml`, package `usd_asset_gate`, `usd-asset-gate` entry point with `check` and
 `rules` subcommands, the `Finding` data model, exit codes (0 pass, 1 findings at or above
 the fail threshold, 2 usage/config error), text and JSON output, pytest + a CI workflow for
 this repo, and a `usd-core` version guard with a clear error when `pxr` is missing.
 
 ### M2 — Upstream OpenUSD validation adapter
+
+Issue: #2
 
 Run `pxr.UsdValidation` validators on each stage through `ValidationContext`, map every
 `ValidationError` (name, type, message, sites, validator) to a `Finding`, select validators
@@ -91,11 +95,15 @@ sublayer, missing default prim, missing `upAxis`/`metersPerUnit`.
 
 ### M3 — Configuration file and rule engine
 
+Issue: #3
+
 `.usd-asset-gate.yml` loader and schema validation, rule registry (upstream + house),
 per-rule `enabled`/`severity`/parameters, `fail_on` threshold, `include`/`exclude` globs,
 per-path `overrides`, and the `rules` subcommand printing the effective configuration.
 
 ### M4 — House rules: stage metadata and file limits
+
+Issue: #4
 
 `stage-metadata` (required `metersPerUnit` / `upAxis` values, optional tolerance),
 `default-prim` (present, optionally a given `kind`), `file-size` (max bytes per extension),
@@ -104,11 +112,15 @@ validators.
 
 ### M5 — House rules: budgets and naming conventions
 
+Issue: #5
+
 `prim-budget` (total and per-type prim counts), `instance-budget` (minimum instancing ratio
 or maximum prototypes, from `UsdUtils.ComputeUsdStageStats`), and `prim-naming` (regex
 per prim type or path glob). Fixtures at and just over each limit.
 
 ### M6 — Changed-file discovery and CI outputs
+
+Issue: #6
 
 `check --changed-since <ref>` using `git diff --name-only --diff-filter=ACMR`, expanding to
 the USD files the change touched; GitHub annotations (`::error file=…::`); job summary
@@ -116,11 +128,15 @@ Markdown; annotation and summary size limits handled.
 
 ### M7 — Single in-place PR comment
 
+Issue: #7
+
 Create-or-update one PR comment identified by a hidden marker, using the REST API through
 the Python standard library and `GITHUB_TOKEN`; skip cleanly (with a log line, not a
 failure) when the token cannot write, such as on pull requests from forks.
 
 ### M8 — Distribution: composite action and local-only mode
+
+Issue: #8
 
 `action.yml` composite action; `ci/usd-asset-gate.sh` copy-in script that does a plain
 `git fetch` checkout, `pip install`, check, summary and comment; example workflows for both
