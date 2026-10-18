@@ -206,7 +206,9 @@ def cmd_rules(args: argparse.Namespace) -> int:
     import json
 
     config = load_config(args.config)
-    path = args.path.replace(os.sep, "/") if args.path else None
+    from .discovery import display_path
+
+    path = display_path(args.path) if args.path else None
     rows = rules_table(config, path)
     if args.format == "json":
         payload = {"config": config.source, "path": path, "fail_on": config.fail_on, "rules": rows}

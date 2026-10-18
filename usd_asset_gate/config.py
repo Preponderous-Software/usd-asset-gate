@@ -133,6 +133,14 @@ def _type_name(value: Any) -> str:
     return type(value).__name__
 
 
+def _show(value: Any) -> str:
+    """Render a YAML value for an error message; dates and other non-JSON types too."""
+    try:
+        return json.dumps(value)
+    except (TypeError, ValueError):
+        return repr(str(value))
+
+
 def _join(path: str, key: Any) -> str:
     if isinstance(key, int):
         return f"{path}[{key}]"
@@ -157,8 +165,8 @@ def validate(value: Any, schema: dict, path: str = "") -> None:
     if expected and not _type_ok(value, expected):
         raise ConfigError(f"{where}: expected {expected}, got {_type_name(value)}")
     if "enum" in schema and value not in schema["enum"]:
-        options = ", ".join(json.dumps(v) for v in schema["enum"])
-        raise ConfigError(f"{where}: {json.dumps(value)} is not one of {options}")
+        options = ", ".join(_show(v) for v in schema["enum"])
+        raise ConfigError(f"{where}: {_show(value)} is not one of {options}")
     if "pattern" in schema and isinstance(value, str) and not re.search(schema["pattern"], value):
         raise ConfigError(f"{where}: {value!r} does not match {schema['pattern']}")
     if "minimum" in schema and isinstance(value, (int, float)) and value < schema["minimum"]:

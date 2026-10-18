@@ -35,6 +35,7 @@ def write(tmp_path: pathlib.Path, text: str) -> str:
         ("fail_on: sometimes\n", "fail_on"),
         ("colour: red\n", "colour: unknown key"),
         ("version: 2\n", "version"),
+        ("fail_on: 2026-10-18\n", "fail_on: '2026-10-18' is not one of"),
         ("upstream:\n  keywords: UsdGeomValidators\n", "upstream.keywords: expected array"),
         ("overrides:\n  - rules: {}\n", "overrides[0].paths: required key is missing"),
         ("overrides:\n  - paths: ['a/**']\n    rules:\n      nope: {}\n", "overrides[0].rules.nope: unknown rule"),
@@ -66,10 +67,15 @@ def test_missing_config_file_exits_2(cli):
 
 def test_config_error_stops_before_any_asset_is_opened(tmp_path, monkeypatch):
     from usd_asset_gate import cli as cli_mod
-    from usd_asset_gate import stage
+    from usd_asset_gate import runner
 
     opened = []
-    monkeypatch.setattr(stage, "open_stage", lambda ctx: opened.append(ctx) or [])
+    real_open = runner.open_stage
+    monkeypatch.setattr(runner, "open_stage", lambda ctx: opened.append(ctx) or real_open(ctx))
+    # The stub is live: a valid config does open the asset.
+    assert cli_mod.main(["check", NO_DEFAULT_PRIM]) == 1
+    assert len(opened) == 1
+    opened.clear()
     config = write(tmp_path, "rules:\n  bogus: {}\n")
     assert cli_mod.main(["check", "--config", config, NO_DEFAULT_PRIM]) == 2
     assert opened == []
@@ -320,6 +326,12 @@ def test_rules_lists_every_rule_with_effective_settings(tmp_path, cli):
     )
     rows = {r["rule"]: r for r in json.loads(out)["rules"]}
     assert rows["default-prim"]["severity"] == "info"
+    # ./relative and absolute spellings resolve to the same path the check uses.
+    for spelling in ("./assets/environments/a.usda", str(pathlib.Path.cwd() / "assets/environments/a.usda")):
+        code, out, _ = cli("rules", "--config", config, "--format", "json", "--path", spelling)
+        data = json.loads(out)
+        assert data["path"] == "assets/environments/a.usda"
+        assert {r["rule"]: r for r in data["rules"]}["default-prim"]["severity"] == "info"
 
 
 def test_rules_text_output(cli):
