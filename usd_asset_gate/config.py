@@ -264,6 +264,18 @@ def parse(data: Any, source: str | None = None) -> Config:
     if data is None:
         data = {}
     validate(data, build_schema())
+    rule_maps = [("rules", data.get("rules", {}))] + [
+        (f"overrides[{i}].rules", o.get("rules", {}))
+        for i, o in enumerate(data.get("overrides", []))
+    ]
+    for prefix, rules in rule_maps:
+        for rule_id, settings in rules.items():
+            spec = registry.get(rule_id)
+            if spec and spec.validate_settings:
+                try:
+                    spec.validate_settings(settings, f"{prefix}.{rule_id}")
+                except ValueError as exc:
+                    raise ConfigError(str(exc)) from None
     upstream = data.get("upstream", {})
     return Config(
         include=list(data["include"]) if "include" in data else None,

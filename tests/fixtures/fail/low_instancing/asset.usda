@@ -1,0 +1,50 @@
+#usda 1.0
+(
+    defaultPrim = "Yard"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "Yard" (
+    kind = "assembly"
+)
+{
+    def Xform "CrateA" (
+        instanceable = true
+        kind = "component"
+        references = </Prototypes/Crate>
+    )
+    {
+    }
+
+    def Xform "CrateB" (
+        kind = "component"
+        references = </Prototypes/Crate>
+    )
+    {
+    }
+
+    def Xform "CrateC" (
+        kind = "component"
+        references = </Prototypes/Crate>
+    )
+    {
+    }
+
+    def Xform "CrateD" (
+        kind = "component"
+        references = </Prototypes/Crate>
+    )
+    {
+    }
+}
+
+class Xform "Prototypes"
+{
+    def Xform "Crate"
+    {
+        def Cube "Body"
+        {
+        }
+    }
+}

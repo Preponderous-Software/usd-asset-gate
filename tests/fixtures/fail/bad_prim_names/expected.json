@@ -1,0 +1,7 @@
+{
+  "description": "A Material named wood (not M_*) and an Xform named table (not PascalCase).",
+  "findings": [
+    {"rule": "prim-naming", "code": "PrimNameMismatch"},
+    {"rule": "prim-naming", "code": "PrimNameMismatch"}
+  ]
+}

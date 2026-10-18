@@ -1,0 +1,6 @@
+{
+  "description": "101 prims against a max_prims: 100 budget (prim-budget defaults to warning; this case raises it to error).",
+  "findings": [
+    {"rule": "prim-budget", "code": "PrimBudgetExceeded"}
+  ]
+}

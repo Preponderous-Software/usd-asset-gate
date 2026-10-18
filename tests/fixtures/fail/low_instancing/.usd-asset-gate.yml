@@ -1,0 +1,5 @@
+version: 1
+rules:
+  instance-budget:
+    severity: error
+    min_instance_ratio: 0.5

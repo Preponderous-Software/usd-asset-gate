@@ -220,6 +220,112 @@
               ]
             }
           }
+        },
+        "prim-budget": {
+          "type": "object",
+          "description": "Total and per-type prim counts stay within budget (UsdUtils.ComputeUsdStageStats, prototypes included).",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "warning",
+                "error"
+              ]
+            },
+            "max_prims": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max_by_type": {
+              "type": "object",
+              "description": "Prim type name -> maximum count, e.g. {Mesh: 5000}.",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "instance-budget": {
+          "type": "object",
+          "description": "Instancing stays within budget: a ceiling on prototypes and a floor on instancedModelCount / modelCount.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "warning",
+                "error"
+              ]
+            },
+            "max_prototypes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "min_instance_ratio": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "prim-naming": {
+          "type": "object",
+          "description": "Prim names match a regex chosen by prim type and/or path glob; the first matching pattern wins.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "warning",
+                "error"
+              ]
+            },
+            "patterns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "regex"
+                ],
+                "properties": {
+                  "match": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "description": "Glob on the prim type name; '*' = any."
+                      },
+                      "path": {
+                        "type": "string",
+                        "description": "Glob on the prim path, e.g. /World/**."
+                      }
+                    }
+                  },
+                  "regex": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "max_findings": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Naming findings listed per file before the rest are summarised (default 50)."
+            }
+          }
         }
       },
       "patternProperties": {
@@ -413,6 +519,112 @@
                         }
                       }
                     ]
+                  }
+                }
+              },
+              "prim-budget": {
+                "type": "object",
+                "description": "Total and per-type prim counts stay within budget (UsdUtils.ComputeUsdStageStats, prototypes included).",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "severity": {
+                    "enum": [
+                      "info",
+                      "warning",
+                      "error"
+                    ]
+                  },
+                  "max_prims": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "max_by_type": {
+                    "type": "object",
+                    "description": "Prim type name -> maximum count, e.g. {Mesh: 5000}.",
+                    "additionalProperties": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              },
+              "instance-budget": {
+                "type": "object",
+                "description": "Instancing stays within budget: a ceiling on prototypes and a floor on instancedModelCount / modelCount.",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "severity": {
+                    "enum": [
+                      "info",
+                      "warning",
+                      "error"
+                    ]
+                  },
+                  "max_prototypes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "min_instance_ratio": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                }
+              },
+              "prim-naming": {
+                "type": "object",
+                "description": "Prim names match a regex chosen by prim type and/or path glob; the first matching pattern wins.",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "severity": {
+                    "enum": [
+                      "info",
+                      "warning",
+                      "error"
+                    ]
+                  },
+                  "patterns": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "regex"
+                      ],
+                      "properties": {
+                        "match": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "description": "Glob on the prim type name; '*' = any."
+                            },
+                            "path": {
+                              "type": "string",
+                              "description": "Glob on the prim path, e.g. /World/**."
+                            }
+                          }
+                        },
+                        "regex": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "max_findings": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Naming findings listed per file before the rest are summarised (default 50)."
                   }
                 }
               }

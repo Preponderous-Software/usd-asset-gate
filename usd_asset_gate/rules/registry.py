@@ -20,7 +20,14 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable
 
 from ..model import Finding, Severity
-from .house import default_prim, file_size, stage_metadata
+from .house import (
+    default_prim,
+    file_size,
+    instance_budget,
+    prim_budget,
+    prim_naming,
+    stage_metadata,
+)
 
 SEVERITY_SCHEMA = {"enum": [s.value for s in Severity]}
 
@@ -54,6 +61,9 @@ class RuleSpec:
     check: Callable[..., Iterable[Finding]] | None = None
     #: House check run from ``os.stat`` before the stage is opened.
     check_before_open: Callable[..., Iterable[Finding]] | None = None
+    #: Extra validation the schema cannot express: (settings, key_path) -> None,
+    #: raising ValueError with a message that names the key.
+    validate_settings: Callable[[dict, str], None] | None = None
 
     @property
     def claimed_validators(self) -> set[str]:
@@ -250,6 +260,76 @@ HOUSE: tuple[RuleSpec, ...] = (
             }
         },
         check_before_open=file_size.check_before_open,
+    ),
+    RuleSpec(
+        id="prim-budget",
+        kind="house",
+        severity=Severity.WARNING,
+        description="Total and per-type prim counts stay within budget "
+        "(UsdUtils.ComputeUsdStageStats, prototypes included).",
+        params={
+            "max_prims": {"type": "integer", "minimum": 0},
+            "max_by_type": {
+                "type": "object",
+                "description": "Prim type name -> maximum count, e.g. {Mesh: 5000}.",
+                "additionalProperties": {"type": "integer", "minimum": 0},
+            },
+        },
+        check=prim_budget.check,
+    ),
+    RuleSpec(
+        id="instance-budget",
+        kind="house",
+        severity=Severity.WARNING,
+        description="Instancing stays within budget: a ceiling on prototypes and a floor "
+        "on instancedModelCount / modelCount.",
+        params={
+            "max_prototypes": {"type": "integer", "minimum": 0},
+            "min_instance_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        },
+        check=instance_budget.check,
+    ),
+    RuleSpec(
+        id="prim-naming",
+        kind="house",
+        severity=Severity.WARNING,
+        description="Prim names match a regex chosen by prim type and/or path glob; the "
+        "first matching pattern wins.",
+        params={
+            "patterns": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["regex"],
+                    "properties": {
+                        "match": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "description": "Glob on the prim type name; '*' = any.",
+                                },
+                                "path": {
+                                    "type": "string",
+                                    "description": "Glob on the prim path, e.g. /World/**.",
+                                },
+                            },
+                        },
+                        "regex": {"type": "string"},
+                    },
+                },
+            },
+            "max_findings": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Naming findings listed per file before the rest are "
+                "summarised (default 50).",
+            },
+        },
+        check=prim_naming.check,
+        validate_settings=prim_naming.validate_settings,
     ),
 )
 

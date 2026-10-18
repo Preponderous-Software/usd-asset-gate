@@ -1,0 +1,9 @@
+version: 1
+rules:
+  prim-naming:
+    severity: error
+    patterns:
+      - match: { type: Material }
+        regex: "^M_[A-Za-z0-9_]+$"
+      - match: { type: "*" }
+        regex: "^[A-Z][A-Za-z0-9_]*$"

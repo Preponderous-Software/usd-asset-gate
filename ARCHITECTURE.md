@@ -134,6 +134,21 @@ search OpenUSD docs for it.
     `KiB`/`MiB`/`GiB` powers of 1024), or a mapping from `.usd`/`.usda`/`.usdc`/`.usdz` or
     `default` to a size. An oversize file gets `FileTooLarge` and is not opened; no other
     rule runs on it.
+  - `prim-budget` and `instance-budget` read `UsdUtils.ComputeUsdStageStats`, computed once
+    per file and shared. `max_prims` is checked against `totalPrimCount` (composed prims
+    plus instancing prototypes, no pseudo-root); `max_by_type` against the primary plus
+    prototype `primCountsByType`. `max_prototypes` is checked against `prototypeCount`;
+    `min_instance_ratio` against `instancedModelCount / modelCount` (instanced models over
+    instanced plus uninstanced models), skipped when the stage has no models. Both default
+    to `warning`. Codes `PrimBudgetExceeded`, `PrimTypeBudgetExceeded`,
+    `PrototypeBudgetExceeded`, `InstanceRatioTooLow`.
+  - `prim-naming` visits `stage.Traverse()` (active, loaded, defined, non-abstract prims;
+    instance proxies are not visited). Patterns are tried in order; `match.type` is a glob
+    on the type name (`"*"` also matches untyped prims), `match.path` a path glob on the
+    prim path; the first pattern that matches decides, and its `regex` is applied with
+    `re.search`. An invalid regex exits 2 naming the key. Each offending prim is a
+    `PrimNameMismatch` finding with its path, up to `max_findings` per file (default 50);
+    the rest are summarised in one `info` finding, `PrimNamingFindingsCapped`.
 - **Severity.** Each rule has a default severity; config can override it. `fail_on`
   (default `error`) sets the threshold for exit code 1. Upstream `ValidationErrorType`
   maps Error→error, Warn→warning, Info→info.
@@ -178,7 +193,7 @@ rules:
   instance-budget:
     severity: warning
     max_prototypes: 200
-    min_instance_ratio: 0.5          # instances / (instances + uninstanced models)
+    min_instance_ratio: 0.5          # instancedModelCount / modelCount
   prim-naming:
     severity: warning
     patterns:
@@ -315,9 +330,11 @@ is opt-in and never imported by the core.
   - `fail/<case>/` — one defect per directory. Present now: `missing_reference`,
     `missing_sublayer`, `no_default_prim`, `no_up_axis` (also no `metersPerUnit`),
     `missing_material_binding_api` (an upstream error with a fixer), `unparseable`,
-    `usdz_compressed` (cannot be opened) and `usdz_misaligned`; planned with the house
-    rules: `wrong_meters_per_unit`, `over_prim_budget`, `low_instancing`, `bad_prim_names`,
-    `oversize_file` (generated at test time, not committed). Each has `expected.json`
+    `usdz_compressed` (cannot be opened), `usdz_misaligned`, `wrong_meters_per_unit`,
+    `wrong_up_axis`, `wrong_kind`, `over_prim_budget`, `low_instancing` and
+    `bad_prim_names`; an oversize file is generated at test time, not committed. A case
+    that needs non-default settings carries its own `.usd-asset-gate.yml`. Each has
+    `expected.json`
     listing the rule IDs and codes
     that must be reported — no more, no fewer. The convention, as implemented in
     `tests/test_fixtures.py`: `expected.json` holds
