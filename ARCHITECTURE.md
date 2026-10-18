@@ -122,6 +122,18 @@ search OpenUSD docs for it.
 - **House rules only add what upstream lacks.** Upstream checks that `upAxis` and
   `metersPerUnit` are *present*; the house rule checks they have the *required values*.
   Budgets, naming and file size have no upstream equivalent.
+- **House rule details, as implemented.** A rule with no limits configured checks nothing,
+  so the defaults never fail a valid asset.
+  - `stage-metadata` compares authored values only (`UsdGeom.StageHasAuthoredMetersPerUnit`,
+    `stage.HasAuthoredMetadata("upAxis")`); a missing value is the upstream presence error.
+    `tolerance` is absolute (default `1e-9`). Codes `MetersPerUnitMismatch`, `UpAxisMismatch`.
+  - `default-prim.kind` uses `Kind.Registry.IsA`, so a kind derived from the required one
+    passes (`assembly` satisfies `model`, not `component`). Code `DefaultPrimKindMismatch`,
+    with the default prim's path.
+  - `file-size.max_bytes` takes bytes, a size string (`KB`/`MB`/`GB` are powers of 1000,
+    `KiB`/`MiB`/`GiB` powers of 1024), or a mapping from `.usd`/`.usda`/`.usdc`/`.usdz` or
+    `default` to a size. An oversize file gets `FileTooLarge` and is not opened; no other
+    rule runs on it.
 - **Severity.** Each rule has a default severity; config can override it. `fail_on`
   (default `error`) sets the threshold for exit code 1. Upstream `ValidationErrorType`
   maps Error→error, Warn→warning, Info→info.

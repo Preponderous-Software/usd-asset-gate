@@ -1,0 +1,6 @@
+{
+  "description": "Authored in meters (metersPerUnit = 1) where the project requires centimeters (0.01).",
+  "findings": [
+    {"rule": "stage-metadata", "code": "MetersPerUnitMismatch"}
+  ]
+}

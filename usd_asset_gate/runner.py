@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import os
 
-from .config import Config, severity_of
-from .model import Finding, Report, Severity, sort_findings
+from .config import Config
+from .model import Finding, Report, Severity, severity_of, sort_findings
 from .rules import registry, upstream
 from .stage import AssetContext, normalize_diagnostic, open_stage
 
