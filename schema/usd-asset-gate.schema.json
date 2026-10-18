@@ -104,7 +104,7 @@
         },
         "default-prim": {
           "type": "object",
-          "description": "The stage has a valid defaultPrim (usdValidation:StageMetadataChecker).",
+          "description": "The stage has a valid defaultPrim (usdValidation:StageMetadataChecker), optionally of a required kind.",
           "additionalProperties": false,
           "properties": {
             "enabled": {
@@ -116,12 +116,16 @@
                 "warning",
                 "error"
               ]
+            },
+            "kind": {
+              "type": "string",
+              "description": "Required kind on the default prim; derived kinds also pass."
             }
           }
         },
         "stage-metadata": {
           "type": "object",
-          "description": "upAxis and metersPerUnit are authored (usdGeomValidators:StageMetadataChecker).",
+          "description": "upAxis and metersPerUnit are authored (usdGeomValidators:StageMetadataChecker) and, when configured, have the required values.",
           "additionalProperties": false,
           "properties": {
             "enabled": {
@@ -132,6 +136,87 @@
                 "info",
                 "warning",
                 "error"
+              ]
+            },
+            "metersPerUnit": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "upAxis": {
+              "enum": [
+                "Y",
+                "Z"
+              ]
+            },
+            "tolerance": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Absolute tolerance for metersPerUnit (default 1e-9)."
+            }
+          }
+        },
+        "file-size": {
+          "type": "object",
+          "description": "Each file stays under a size limit, checked before the stage is opened.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "warning",
+                "error"
+              ]
+            },
+            "max_bytes": {
+              "description": "Bytes or a size such as 50MB (SI) / 2GiB (IEC), or a mapping from extension (.usd, .usda, .usdc, .usdz) or 'default' to a size.",
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\s*\\d+(\\.\\d+)?\\s*([KMG]i?)?B\\s*$"
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "default": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^\\s*\\d+(\\.\\d+)?\\s*([KMG]i?)?B\\s*$"
+                        }
+                      ]
+                    }
+                  },
+                  "patternProperties": {
+                    "^\\.usd[acz]?$": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^\\s*\\d+(\\.\\d+)?\\s*([KMG]i?)?B\\s*$"
+                        }
+                      ]
+                    }
+                  }
+                }
               ]
             }
           }
@@ -214,7 +299,7 @@
               },
               "default-prim": {
                 "type": "object",
-                "description": "The stage has a valid defaultPrim (usdValidation:StageMetadataChecker).",
+                "description": "The stage has a valid defaultPrim (usdValidation:StageMetadataChecker), optionally of a required kind.",
                 "additionalProperties": false,
                 "properties": {
                   "enabled": {
@@ -226,12 +311,16 @@
                       "warning",
                       "error"
                     ]
+                  },
+                  "kind": {
+                    "type": "string",
+                    "description": "Required kind on the default prim; derived kinds also pass."
                   }
                 }
               },
               "stage-metadata": {
                 "type": "object",
-                "description": "upAxis and metersPerUnit are authored (usdGeomValidators:StageMetadataChecker).",
+                "description": "upAxis and metersPerUnit are authored (usdGeomValidators:StageMetadataChecker) and, when configured, have the required values.",
                 "additionalProperties": false,
                 "properties": {
                   "enabled": {
@@ -242,6 +331,87 @@
                       "info",
                       "warning",
                       "error"
+                    ]
+                  },
+                  "metersPerUnit": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "upAxis": {
+                    "enum": [
+                      "Y",
+                      "Z"
+                    ]
+                  },
+                  "tolerance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Absolute tolerance for metersPerUnit (default 1e-9)."
+                  }
+                }
+              },
+              "file-size": {
+                "type": "object",
+                "description": "Each file stays under a size limit, checked before the stage is opened.",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "severity": {
+                    "enum": [
+                      "info",
+                      "warning",
+                      "error"
+                    ]
+                  },
+                  "max_bytes": {
+                    "description": "Bytes or a size such as 50MB (SI) / 2GiB (IEC), or a mapping from extension (.usd, .usda, .usdc, .usdz) or 'default' to a size.",
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\s*\\d+(\\.\\d+)?\\s*([KMG]i?)?B\\s*$"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "default": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "string",
+                                "pattern": "^\\s*\\d+(\\.\\d+)?\\s*([KMG]i?)?B\\s*$"
+                              }
+                            ]
+                          }
+                        },
+                        "patternProperties": {
+                          "^\\.usd[acz]?$": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              {
+                                "type": "string",
+                                "pattern": "^\\s*\\d+(\\.\\d+)?\\s*([KMG]i?)?B\\s*$"
+                              }
+                            ]
+                          }
+                        }
+                      }
                     ]
                   }
                 }

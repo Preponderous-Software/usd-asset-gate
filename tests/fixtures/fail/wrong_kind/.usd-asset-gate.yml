@@ -1,0 +1,4 @@
+version: 1
+rules:
+  default-prim:
+    kind: component

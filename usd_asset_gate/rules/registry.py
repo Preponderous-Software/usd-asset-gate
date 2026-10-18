@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable
 
 from ..model import Finding, Severity
+from .house import default_prim, file_size, stage_metadata
 
 SEVERITY_SCHEMA = {"enum": [s.value for s in Severity]}
 
@@ -183,15 +184,33 @@ ALIASES: tuple[RuleSpec, ...] = (
     RuleSpec(
         id="default-prim",
         kind="alias",
-        description="The stage has a valid defaultPrim (usdValidation:StageMetadataChecker).",
+        description="The stage has a valid defaultPrim (usdValidation:StageMetadataChecker), "
+        "optionally of a required kind.",
+        params={
+            "kind": {
+                "type": "string",
+                "description": "Required kind on the default prim; derived kinds also pass.",
+            }
+        },
         claims=(Claim("usdValidation:StageMetadataChecker", ("MissingDefaultPrim",)),),
         report_claimed=_report_each,
+        check=default_prim.check,
     ),
     RuleSpec(
         id="stage-metadata",
         kind="alias",
         description="upAxis and metersPerUnit are authored "
-        "(usdGeomValidators:StageMetadataChecker).",
+        "(usdGeomValidators:StageMetadataChecker) and, when configured, have the "
+        "required values.",
+        params={
+            "metersPerUnit": {"type": "number", "exclusiveMinimum": 0},
+            "upAxis": {"enum": ["Y", "Z"]},
+            "tolerance": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Absolute tolerance for metersPerUnit (default 1e-9).",
+            },
+        },
         claims=(
             Claim(
                 "usdGeomValidators:StageMetadataChecker",
@@ -199,11 +218,43 @@ ALIASES: tuple[RuleSpec, ...] = (
             ),
         ),
         report_claimed=_report_each,
+        check=stage_metadata.check,
+    ),
+)
+
+_SIZE = {
+    "anyOf": [
+        {"type": "integer", "minimum": 0},
+        {"type": "string", "pattern": file_size.SIZE_PATTERN},
+    ]
+}
+
+HOUSE: tuple[RuleSpec, ...] = (
+    RuleSpec(
+        id="file-size",
+        kind="house",
+        description="Each file stays under a size limit, checked before the stage is opened.",
+        params={
+            "max_bytes": {
+                "description": "Bytes or a size such as 50MB (SI) / 2GiB (IEC), or a mapping "
+                "from extension (.usd, .usda, .usdc, .usdz) or 'default' to a size.",
+                "anyOf": [
+                    _SIZE,
+                    {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {"default": _SIZE},
+                        "patternProperties": {r"^\.usd[acz]?$": _SIZE},
+                    },
+                ],
+            }
+        },
+        check_before_open=file_size.check_before_open,
     ),
 )
 
 #: Every configurable non-upstream rule, in display order.
-RULES: tuple[RuleSpec, ...] = ALIASES
+RULES: tuple[RuleSpec, ...] = ALIASES + HOUSE
 
 BY_ID: dict[str, RuleSpec] = {r.id: r for r in RULES}
 

@@ -90,6 +90,12 @@ def is_failing(finding: Finding, fail_on: str) -> bool:
     return finding.severity.rank >= Severity.parse(fail_on).rank
 
 
+def severity_of(settings: dict, default: Severity) -> Severity:
+    """The ``severity`` a rule's settings ask for, else ``default``."""
+    value = settings.get("severity")
+    return Severity.parse(value) if value else default
+
+
 def exit_code_for(findings: Iterable[Finding], fail_on: str) -> int:
     """0 when nothing reaches ``fail_on``, otherwise 1."""
     return 1 if any(is_failing(f, fail_on) for f in findings) else 0

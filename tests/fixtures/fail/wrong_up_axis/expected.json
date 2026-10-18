@@ -1,0 +1,6 @@
+{
+  "description": "A Z-up stage where the project requires Y-up.",
+  "findings": [
+    {"rule": "stage-metadata", "code": "UpAxisMismatch"}
+  ]
+}

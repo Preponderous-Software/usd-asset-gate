@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 from .discovery import matches_glob
-from .model import FAIL_ON_VALUES, Severity
+from .model import FAIL_ON_VALUES, severity_of  # noqa: F401 (re-exported)
 from .rules import registry
 
 DEFAULT_CONFIG_FILE = ".usd-asset-gate.yml"
@@ -159,7 +159,16 @@ def validate(value: Any, schema: dict, path: str = "") -> None:
             except ConfigError as exc:
                 errors.append(str(exc))
         else:
-            raise ConfigError(errors[0])
+            # Prefer the error from the option whose type matches the value: for a
+            # mapping, "unknown key" is more useful than "expected integer".
+            same_type = [
+                err
+                for option, err in zip(schema["anyOf"], errors)
+                if option.get("type") and _type_ok(value, option["type"])
+            ]
+            if same_type:
+                raise ConfigError(same_type[0])
+            raise ConfigError(f"{where}: {json.dumps(value)} is not a valid value")
         return
     expected = schema.get("type")
     if expected and not _type_ok(value, expected):
@@ -169,6 +178,12 @@ def validate(value: Any, schema: dict, path: str = "") -> None:
         raise ConfigError(f"{where}: {_show(value)} is not one of {options}")
     if "pattern" in schema and isinstance(value, str) and not re.search(schema["pattern"], value):
         raise ConfigError(f"{where}: {value!r} does not match {schema['pattern']}")
+    if (
+        "exclusiveMinimum" in schema
+        and isinstance(value, (int, float))
+        and value <= schema["exclusiveMinimum"]
+    ):
+        raise ConfigError(f"{where}: must be > {schema['exclusiveMinimum']}")
     if "minimum" in schema and isinstance(value, (int, float)) and value < schema["minimum"]:
         raise ConfigError(f"{where}: must be >= {schema['minimum']}")
     if "maximum" in schema and isinstance(value, (int, float)) and value > schema["maximum"]:
@@ -317,11 +332,6 @@ def check_upstream_names(config: Config, available: Iterable[str]) -> None:
                     f"{prefix}.{rule_id}: unknown rule (no such upstream validator in the "
                     "installed usd-core)"
                 )
-
-
-def severity_of(settings: dict, default: Severity) -> Severity:
-    value = settings.get("severity")
-    return Severity.parse(value) if value else default
 
 
 if __name__ == "__main__":
