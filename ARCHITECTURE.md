@@ -32,6 +32,8 @@ shell layer, so the same core runs from a laptop, a pre-commit hook or any CI sy
 | Component | Module | Responsibility |
 |---|---|---|
 | CLI | `usd_asset_gate/cli.py` | `argparse` front end: `check`, `rules`, `comment`. Exit codes 0 / 1 / 2. |
+| Finding model | `model.py` | `Finding`, `Severity`, `Report`; stable ordering; exit code from `fail_on`. |
+| Runner | `runner.py` | Opens each file once, runs every enabled rule, collects and sorts findings. A file that cannot be opened at all is reported under the built-in rule `stage-open` (code `StageOpenFailed`). |
 | Config loader | `config.py` | Find and parse `.usd-asset-gate.yml`, validate against the schema, merge defaults and per-path overrides. |
 | Discovery | `discovery.py` | Expand paths and globs; `--changed-since <ref>` via `git diff`; filter by extension and `include`/`exclude`. |
 | Stage loader | `stage.py` | Open each file once (`Usd.Stage.Open`), capture composition diagnostics, compute stats once, hand a shared `AssetContext` to every rule. |
@@ -263,7 +265,11 @@ is opt-in and never imported by the core.
     `no_default_prim`, `no_up_axis`, `wrong_meters_per_unit`, `over_prim_budget`,
     `low_instancing`, `bad_prim_names`, `oversize_file` (generated at test time, not
     committed), `usdz_compressed`. Each has `expected.json` listing the rule IDs and codes
-    that must be reported — no more, no fewer.
+    that must be reported — no more, no fewer. The convention, as implemented in
+    `tests/test_fixtures.py`: `expected.json` holds
+    `{"description": "...", "findings": [{"rule": "...", "code": "..."}]}`; every USD file
+    in the case directory is checked together and the reported `(rule, code)` pairs must
+    equal that list as a multiset.
   - `.usdc`/`.usdz` fixtures are generated from `.usda` sources by a script in
     `tests/fixtures/build.py` so the binary files are reproducible.
 - **Unit tests** per rule with in-memory stages (`Usd.Stage.CreateInMemory`) for boundary

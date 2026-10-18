@@ -5,7 +5,7 @@ It runs OpenUSD's own validators plus your **house rules** on every pull request
 
 It ships as a **plain CLI** that runs anywhere Python runs, and as a **GitHub Action** that can also be used in organisations that allow no third-party actions.
 
-> **Status: planning — not yet implemented.** This repository currently holds the design documents and the MVP issue list. Nothing below works yet.
+> **Status: in development — not yet usable as a gate.** The package skeleton, CLI, finding model and text/JSON output exist (milestone M1); the rules, CI outputs and GitHub Action are still being built, milestone by milestone, from the MVP issue list. Features below are the MVP scope, not current behaviour.
 
 ---
 
@@ -96,6 +96,9 @@ Planned layout:
 usd-asset-gate/  
  ├── usd_asset_gate/          # Python package  
  │    ├── cli.py              # check / rules / comment subcommands  
+ │    ├── model.py            # Finding, Severity, Report  
+ │    ├── runner.py           # runs rules over files, collects findings  
+ │    ├── stage.py            # opens each stage once, captures diagnostics  
  │    ├── config.py           # .usd-asset-gate.yml loader and schema  
  │    ├── discovery.py        # paths, globs, changed-since-ref  
  │    ├── rules/              # upstream adapter and house rules  

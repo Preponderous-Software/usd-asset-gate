@@ -1,0 +1,58 @@
+# Tests for usd-asset-gate itself.
+#
+# Like the gate it tests, this workflow uses no `uses:` lines at all: the checkout
+# is plain git and Python versions come from `uv`, installed with pip.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (python ${{ matrix.python }}, usd-core ${{ matrix.usd-core }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.13"]
+        usd-core: ["25.8", "26.8"]
+    steps:
+      - name: Checkout (plain git)
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          git init -q .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)" \
+            fetch -q --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git checkout -q --detach "${GITHUB_SHA}"
+
+      - name: Set up Python ${{ matrix.python }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/uv"
+          "$RUNNER_TEMP/uv/bin/pip" install -q "uv==0.11.16"
+          "$RUNNER_TEMP/uv/bin/uv" venv -q --seed --python "${{ matrix.python }}" .venv
+          .venv/bin/python --version
+
+      - name: Install (pip install .)
+        run: |
+          .venv/bin/python -m pip install -q "usd-core==${{ matrix.usd-core }}" ".[test]"
+          .venv/bin/python -c "from pxr import Usd; print('OpenUSD', Usd.GetVersion())"
+
+      - name: Smoke test the installed command
+        run: |
+          .venv/bin/usd-asset-gate --help
+          .venv/bin/usd-asset-gate check tests/fixtures/pass
+
+      - name: Run tests
+        run: .venv/bin/python -m pytest -ra
