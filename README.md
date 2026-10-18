@@ -5,7 +5,7 @@ It runs OpenUSD's own validators plus your **house rules** on every pull request
 
 It ships as a **plain CLI** that runs anywhere Python runs, and as a **GitHub Action** that can also be used in organisations that allow no third-party actions.
 
-> **Status: in development — not yet usable as a gate.** The package skeleton, CLI, finding model and text/JSON output (milestone M1), the in-process OpenUSD validator adapter (M2) and the `.usd-asset-gate.yml` configuration with its rule engine and aliases (M3), the stage-metadata, default-prim kind and file-size house rules (M4), the budget and naming rules (M5), and changed-file discovery with GitHub annotations and job-summary output (M6) exist; the PR comment and the GitHub Action are still being built, milestone by milestone, from the MVP issue list. Features below are the MVP scope, not current behaviour.
+> **Status: in development — not yet usable as a gate.** The package skeleton, CLI, finding model and text/JSON output (milestone M1), the in-process OpenUSD validator adapter (M2) and the `.usd-asset-gate.yml` configuration with its rule engine and aliases (M3), the stage-metadata, default-prim kind and file-size house rules (M4), the budget and naming rules (M5), changed-file discovery with GitHub annotations and job-summary output (M6), and the single in-place PR comment (M7) exist; the GitHub Action and copy-in script are still being built, milestone by milestone, from the MVP issue list. Features below are the MVP scope, not current behaviour.
 
 ---
 

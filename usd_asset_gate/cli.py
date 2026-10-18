@@ -106,6 +106,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="also print the diagnostics OpenUSD wrote while opening and validating (stderr)",
     )
 
+    comment = sub.add_parser(
+        "comment",
+        help="create or update the single pull-request comment from a JSON report",
+        description="Reads GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_API_URL and the pull "
+        "request number from GITHUB_EVENT_PATH. Skips with exit 0 (and a log line) when "
+        "there is no token or pull request, or when the token cannot write (403).",
+    )
+    comment.add_argument(
+        "--from", dest="report", required=True, metavar="FILE", help="report from check --json"
+    )
+    comment.add_argument("--pr", type=int, metavar="N", help="pull request number (overrides the event)")
+
     rules = sub.add_parser("rules", help="list every available rule and its effective setting")
     rules.add_argument("--config", metavar="FILE", help=config_help)
     rules.add_argument(
@@ -283,10 +295,33 @@ def cmd_rules(args: argparse.Namespace) -> int:
     return EXIT_PASS
 
 
+def cmd_comment(args: argparse.Namespace) -> int:
+    import json
+
+    from .report import comment
+    from .report import json as json_report
+
+    try:
+        with open(args.report, encoding="utf-8") as fh:
+            report = json_report.from_dict(json.load(fh))
+    except (OSError, ValueError, KeyError) as exc:
+        raise UsageError(f"cannot read report {args.report}: {exc}") from None
+    ctx = comment.Context.from_env(pr=args.pr)
+    try:
+        result = comment.post(report, ctx)
+    except comment.Skip as exc:
+        sys.stdout.write(f"usd-asset-gate comment: skipped: {exc}\n")
+        return EXIT_PASS
+    except comment.CommentError as exc:
+        raise UsageError(f"comment: {exc}") from None
+    sys.stdout.write(f"usd-asset-gate comment: {result} on #{ctx.pr_number}\n")
+    return EXIT_PASS
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    handler = {"check": cmd_check, "rules": cmd_rules}[args.command]
+    handler = {"check": cmd_check, "rules": cmd_rules, "comment": cmd_comment}[args.command]
     try:
         return handler(args)
     except UsageError as exc:
