@@ -174,7 +174,7 @@ library only, so the runtime dependencies stay at `usd-core` and `PyYAML`.
 | JSON | `--format json` | `{ "version": 1, "files": [...], "findings": [...], "summary": {...} }`; stable, documented, used by the comment step. |
 | GitHub annotations | `--format github` | `::error file=<path>,line=<n>,title=<rule>::<message>` workflow commands. GitHub shows a limited number of annotations per step, so the reporter prints the most severe first and a "N more in the job summary" notice. |
 | Job summary | `--summary <file>` | Appends Markdown to `$GITHUB_STEP_SUMMARY`: totals, a per-file table, collapsible details. Truncates under GitHub's per-step summary size limit with a pointer to the JSON artifact. |
-| PR comment | `usd-asset-gate comment --from report.json` | One comment per PR, found by the hidden marker `<!-- usd-asset-gate:report -->` and edited with `PATCH /repos/{owner}/{repo}/issues/comments/{id}`; created with `POST …/issues/{n}/comments` if absent. When all findings clear, the comment is edited to a short "all checks pass" note, not deleted, so the history stays readable. Requires `pull-requests: write` (or `issues: write`). On `403` (for example, a PR from a fork, where `GITHUB_TOKEN` is read-only) it logs and exits 0. |
+| PR comment | `usd-asset-gate comment --from report.json` | One comment per PR, found by the hidden marker `<!-- usd-asset-gate:report -->` and edited with `PATCH /repos/{owner}/{repo}/issues/comments/{id}`; created with `POST …/issues/{n}/comments` if absent. When all findings clear, the comment is edited to a short "all checks pass" note, not deleted, so the history stays readable. Requires `pull-requests: write` (or `issues: write`). On `403` (for example, a PR from a fork, where `GITHUB_TOKEN` is read-only) it logs why and exits 0; the log, annotations and job summary still carry the results. `pull_request_target` is never used to work around this (see [Decisions](#decisions)). |
 
 ## Running in GitHub Actions
 
@@ -251,7 +251,8 @@ The token is passed through `http.extraheader` for the fetch only and is never w
 | `git` | any recent | Changed-file discovery; must be on `PATH` (it is on GitHub-hosted runners). |
 
 No other runtime dependencies: HTTP calls use `urllib.request`, schema validation is
-hand-written.
+hand-written. The post-MVP `[nvidia]` extra (see [Optional NVIDIA rule source](#optional-nvidia-rule-source))
+is opt-in and never imported by the core.
 
 ## Testing strategy
 
@@ -275,32 +276,91 @@ hand-written.
 - **Dogfooding**: this repository's own workflow runs the local-only mode against
   `tests/fixtures/pass/` (must pass) and `tests/fixtures/fail/` (must fail).
 
-## Post-MVP: thumbnails
+## Post-MVP roadmap
 
-Render a thumbnail per changed asset and embed it in the PR comment. Constraints found so
-far: the `usd-core` wheel includes no Hydra/imaging modules and no `usdrecord`, so rendering
-needs either a full OpenUSD build (for `usdrecord`) in a container, or a separate,
-non-Hydra preview path. Images cannot be attached to PR comments through the REST API, so
-they would have to be uploaded as a workflow artifact or committed to a branch and linked.
+None of this is started until the MVP acceptance criteria in [MVP.md](MVP.md) are met. Each
+item follows from a decision recorded under [Decisions](#decisions).
+
+### Thumbnails (full OpenUSD container)
+
+Render a thumbnail per changed asset and link it from the PR comment. The `usd-core` wheel
+includes no Hydra/imaging modules and no `usdrecord`, so the thumbnail step runs in a
+**Docker image with a full OpenUSD build** that provides `usdrecord`. The image is used only
+for this optional step; the gate itself keeps running on `pip install usd-core`.
+
+- **Image build.** A `Dockerfile` in this repository (planned path
+  `docker/thumbnails/Dockerfile`) builds OpenUSD from the upstream source tag with its own
+  `build_scripts/build_usd.py`, with imaging and Python enabled, and installs
+  `usd-asset-gate` alongside it. Rendering is headless with software OpenGL (for example
+  Mesa's llvmpipe under a virtual X server); the exact renderer setup is to be verified when
+  the image is first built, not assumed.
+- **Pinned OpenUSD version.** The OpenUSD release is a build argument pinned to one tag
+  (initially `v26.08`, matching the default `usd-core` 26.8), and is bumped together with the
+  default `usd-core` version so thumbnails and validation see the same OpenUSD. Base images
+  are pinned by digest. A published image is referenced by digest, never by a moving tag.
+- **Cost.** A full OpenUSD build with imaging is slow to compile and produces a large image,
+  so it is built once per pinned version and published (for example to GHCR under this
+  repository), not built on every pull request. Pulling and rendering add time to each
+  run, so the step is opt-in, runs as a separate job, and runs only when the PR changed USD
+  files.
+- **Local-only constraint still respected.** The image is a container, not an action: the
+  workflow fetches it with a plain `docker pull <image>@sha256:<digest>` (or builds it with
+  `docker build` from the copied-in `Dockerfile`, for organisations that allow no external
+  images) and runs it with `docker run` in a `run:` step. No `uses:` line is added, in either
+  the composite action or the local-only workflow. Assets from the PR are mounted read-only
+  and the render runs with `--network none`, since the assets are untrusted input.
+- **Where images live.** Images cannot be attached to PR comments through the REST API, so
+  they have to be uploaded as a workflow artifact or committed to a branch and linked. That
+  choice is still open (see [Open questions](#open-questions)).
+
+### Distribution (PyPI and GitHub Marketplace)
+
+Once the MVP works, the package is published to PyPI as `usd-asset-gate` (the name was
+unclaimed on 2026-10-17) and the composite action is listed on the GitHub Marketplace. The
+MVP code is written to be publishable (complete `pyproject.toml` metadata, an `action.yml`
+with Marketplace-compatible `name`/`description`/`branding`), but no release is made as part
+of an MVP milestone. Local-only users are unaffected: they can still copy in
+`ci/usd-asset-gate.sh` and pin a version or vendor the source tree.
+
+### Optional NVIDIA rule source
+
+`usd-validation-nvidia` is offered as an optional extra, installed with
+`pip install usd-asset-gate[nvidia]`, and plugged in behind the same rule interface as the
+upstream adapter. The core runtime dependencies stay `usd-core` and `PyYAML`; nothing in the
+core imports the extra, and a config that enables NVIDIA rules without the extra installed
+exits 2 with an install hint.
+
+## Decisions
+
+Recorded on 2026-10-17 by the project owner; each one closes a former open question.
+
+1. **Thumbnails use a full OpenUSD container.** A Docker image with a full OpenUSD build
+   provides `usdrecord` for the optional, post-MVP thumbnail step; a lightweight non-Hydra
+   preview path is not pursued. Details under
+   [Thumbnails](#thumbnails-full-openusd-container). Where the images are stored is still
+   open.
+2. **Fork pull requests: no comment in the MVP.** On a PR from a fork, where `GITHUB_TOKEN`
+   is read-only, the comment step logs why it skipped and exits 0; the job log, annotations
+   and job summary still show the results. `pull_request_target` is not used, and no
+   `workflow_run` follow-up job is added for the MVP.
+3. **Distribution: PyPI and GitHub Marketplace after the MVP.** Publish `usd-asset-gate` to
+   PyPI and list the action on the Marketplace once the MVP works. This is a post-MVP
+   roadmap item, not an MVP milestone. Details under
+   [Distribution](#distribution-pypi-and-github-marketplace).
+4. **NVIDIA `usd-validation-nvidia` is an optional extra, post-MVP.** Installed as
+   `usd-asset-gate[nvidia]`; core runtime dependencies stay `usd-core` + `PyYAML` only.
+   Details under [Optional NVIDIA rule source](#optional-nvidia-rule-source).
 
 ## Open questions
 
-1. **Thumbnail renderer.** Which route is acceptable: a container image with a full OpenUSD
-   build and `usdrecord` (software GL), or a lightweight non-Hydra preview? And where do
-   images live — artifacts (need login to view) or an orphan branch?
-2. **Fork pull requests.** Commenting from forks needs `pull_request_target` or a
-   `workflow_run` follow-up job. Both carry security trade-offs; the MVP just skips the
-   comment on forks. Is that acceptable?
-3. **Register house rules as OpenUSD validators?** `UsdValidation.ValidationRegistry` exposes
+1. **Thumbnail storage.** Where do rendered thumbnails live — workflow artifacts (viewers
+   need to be logged in) or an orphan branch in the consumer repository?
+2. **Register house rules as OpenUSD validators?** `UsdValidation.ValidationRegistry` exposes
    `RegisterStageValidator` / `RegisterPrimValidator` from Python. Registering house rules
    there would make them runnable by other framework users, at the cost of coupling to an
    API that is still changing between releases. The MVP keeps its own rule interface.
-4. **Optional NVIDIA rule source.** Offer `usd-validation-nvidia` as an extra
-   (`pip install usd-asset-gate[nvidia]`) behind the same rule interface?
-5. **Variants.** `usdchecker` exposes `--variantSets` / `--variants` and caps variant
+3. **Variants.** `usdchecker` exposes `--variantSets` / `--variants` and caps variant
    validation at 1000 calls by default. Should the config expose the same controls, and
    what is a sane default for CI time?
-6. **Distribution.** Publish to PyPI (the name `usd-asset-gate` was unclaimed on
-   2026-10-17) and the GitHub Marketplace, or ship from git only at first?
-7. **Line numbers.** Mapping a prim path to a `.usda` line number needs a light text scan;
+4. **Line numbers.** Mapping a prim path to a `.usda` line number needs a light text scan;
    is "file-level annotation" good enough for `.usdc`/`.usdz` and for the MVP?

@@ -66,11 +66,13 @@ The MVP is defined in [`MVP.md`](MVP.md) and tracked as issues labelled `mvp`.
 **CI integration**
 - Changed-files mode (`--changed-since <ref>`).
 - GitHub annotations and job summary.
-- One PR comment, created once and edited in place.
+- One PR comment, created once and edited in place (skipped on PRs from forks, where the log and job summary still show the results).
 - Composite action, or a copy-in script with **no third-party `uses:`**.
 
 **Planned after the MVP**
-- Thumbnails of changed assets in the PR comment.
+- Publishing to PyPI (`usd-asset-gate`) and listing the action on the GitHub Marketplace.
+- Thumbnails of changed assets in the PR comment, rendered by `usdrecord` in an optional full-OpenUSD Docker image.
+- NVIDIA `usd-validation-nvidia` as an optional extra rule source (`pip install usd-asset-gate[nvidia]`).
 
 > For the full design, see [`ARCHITECTURE.md`](ARCHITECTURE.md). For the problem, audience and prior art, see [`CONCEPT.md`](CONCEPT.md).
 

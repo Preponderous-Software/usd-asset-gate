@@ -40,14 +40,16 @@ and exits non-zero.
 
 ## Out of scope (for the MVP)
 
-- Thumbnail rendering (needs Hydra/imaging, which the `usd-core` wheel does not include —
-  see ARCHITECTURE.md open questions). Planned for after the MVP.
+- Thumbnail rendering (needs Hydra/imaging, which the `usd-core` wheel does not include).
+  Planned for after the MVP in a full OpenUSD container — see
+  [ARCHITECTURE.md](ARCHITECTURE.md#thumbnails-full-openusd-container).
 - Auto-fixing, including OpenUSD fixers.
 - Variant-by-variant validation controls beyond the framework defaults.
 - Custom asset resolvers, Git LFS-specific handling, Omniverse/Nucleus paths.
-- Third-party rule libraries (e.g. NVIDIA `usd-validation-nvidia`) as rule sources.
-- Publishing to the GitHub Marketplace and PyPI (the code should be ready for it; the act of
-  publishing is an owner decision).
+- Third-party rule libraries (e.g. NVIDIA `usd-validation-nvidia`) as rule sources. NVIDIA's
+  validator is planned as an optional post-MVP extra (`usd-asset-gate[nvidia]`).
+- Publishing to PyPI and the GitHub Marketplace. The code should be ready for it; publishing
+  happens after the MVP (see [After the MVP](#after-the-mvp)).
 
 ## Acceptance criteria
 
@@ -132,7 +134,9 @@ Issue: #7
 
 Create-or-update one PR comment identified by a hidden marker, using the REST API through
 the Python standard library and `GITHUB_TOKEN`; skip cleanly (with a log line, not a
-failure) when the token cannot write, such as on pull requests from forks.
+failure) when the token cannot write, such as on pull requests from forks. On fork PRs the
+results are still shown in the job log, annotations and job summary; `pull_request_target`
+is not used.
 
 ### M8 — Distribution: composite action and local-only mode
 
@@ -142,3 +146,16 @@ Issue: #8
 `git fetch` checkout, `pip install`, check, summary and comment; example workflows for both
 modes; documentation; this repository's own CI dogfooding the local-only workflow on its
 fixtures.
+
+## After the MVP
+
+Not MVP milestones and not tracked as `mvp` issues; started only once the acceptance
+criteria above are met. Owner decisions of 2026-10-17, detailed in
+[ARCHITECTURE.md](ARCHITECTURE.md#post-mvp-roadmap):
+
+- **Distribution** — publish `usd-asset-gate` to PyPI and list the composite action on the
+  GitHub Marketplace.
+- **Thumbnails** — optional thumbnail step running `usdrecord` in a Docker image with a full,
+  version-pinned OpenUSD build, fetched or built with plain `docker` commands (no `uses:`).
+- **NVIDIA rule source** — `usd-validation-nvidia` as an optional extra
+  (`pip install usd-asset-gate[nvidia]`); core runtime dependencies stay `usd-core` + `PyYAML`.
