@@ -19,10 +19,17 @@ def is_usd_file(path: str) -> bool:
 def display_path(path: str) -> str:
     """Forward-slash path relative to the working directory when it is inside it."""
     abs_path = os.path.abspath(path)
-    rel = os.path.relpath(abs_path)
-    if rel.startswith(".."):
+    try:
+        rel = os.path.relpath(abs_path)
+    except ValueError:  # Windows: different drive or UNC share than the working dir
+        rel = abs_path
+    if rel == ".." or rel.startswith(".." + os.sep):
         rel = abs_path
     return rel.replace(os.sep, "/")
+
+
+def _raise_walk_error(err: OSError) -> None:
+    raise DiscoveryError(f"cannot read directory {err.filename}: {err.strerror}")
 
 
 def expand_paths(paths: list[str]) -> list[tuple[str, bool]]:
@@ -35,7 +42,7 @@ def expand_paths(paths: list[str]) -> list[tuple[str, bool]]:
     found: dict[str, bool] = {}
     for raw in paths:
         if os.path.isdir(raw):
-            for root, dirs, files in os.walk(raw):
+            for root, dirs, files in os.walk(raw, onerror=_raise_walk_error):
                 dirs[:] = sorted(d for d in dirs if not d.startswith("."))
                 for name in files:
                     if is_usd_file(name):
