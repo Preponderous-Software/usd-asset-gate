@@ -1,7 +1,8 @@
 # usd-asset-gate — Architecture
 
-> Status: planning. This is the intended design; nothing is implemented yet. API names for
-> OpenUSD were checked against `usd-core` 26.8 (OpenUSD v26.08) on 2026-10-17.
+> Status: MVP implemented (milestones M1–M8). This document describes the code as built;
+> the post-MVP sections are still plans. API names for OpenUSD were checked against
+> `usd-core` 26.8 (OpenUSD v26.08) on 2026-10-17.
 
 ## Overview
 
@@ -253,15 +254,19 @@ Resolution rules, as implemented:
 ```yaml
 - uses: actions/checkout@v7            # or the plain-git step below
   with: { fetch-depth: 0 }
-- uses: Preponderous-Software/usd-asset-gate@v1
+- uses: Preponderous-Software/usd-asset-gate@<full-commit-sha>
   with:
     config: .usd-asset-gate.yml
     usd-core-version: "26.8"
     comment: true
 ```
 
-The composite action itself uses no other actions: it only runs `pip` and `bash`, so
-pinning it by commit SHA pins everything.
+The composite action itself uses no other actions: its single step runs
+`ci/usd-asset-gate.sh` with `bash`, installing `usd-core` and the action's own source tree
+with `pip`, so pinning it by commit SHA pins everything. Inputs: `config`,
+`usd-core-version`, `paths`, `comment`, `fail-on`, `base-sha` (default: the pull request's
+base SHA) and `github-token` (default: `github.token`). A full example is in
+[`examples/workflow-action.yml`](examples/workflow-action.yml).
 
 ### Mode B — local-only (no third-party `uses:`)
 
@@ -296,19 +301,26 @@ jobs:
         run: bash ci/usd-asset-gate.sh
 ```
 
+The complete file is [`examples/workflow-local-only.yml`](examples/workflow-local-only.yml).
 `ci/usd-asset-gate.sh` then:
 
-1. `python3 -m pip install "usd-core==${USD_CORE_VERSION:-26.8}" "usd-asset-gate==${VERSION}"`
-   — or, for fully vendored use, `pip install ./vendor/usd-asset-gate` from a copied source
-   tree;
-2. runs `usd-asset-gate check --changed-since "$BASE_SHA" --format github
-   --summary "$GITHUB_STEP_SUMMARY" --json report.json`;
-3. runs `usd-asset-gate comment --from report.json` when `GITHUB_TOKEN` and a PR number are
-   present;
-4. exits with the `check` exit code.
+1. makes sure `BASE_SHA` is present (fetching it, and unshallowing if there is no merge
+   base, with the token as a one-off `http.extraheader`);
+2. creates a virtualenv under `$RUNNER_TEMP` (system Pythons on current runners refuse
+   `pip install`) and installs `usd-core==${USD_CORE_VERSION:-26.8}` and
+   `$USD_ASSET_GATE_SPEC` — a version pin once published, a vendored source tree such as
+   `./vendor/usd-asset-gate`, or a git URL pinned to a commit (the default is the upstream
+   repository at `main`, and the script prints a reminder to pin it);
+3. runs `usd-asset-gate check --changed-since "$BASE_SHA" --format github
+   --summary "$GITHUB_STEP_SUMMARY" --json "$RUNNER_TEMP/usd-asset-gate-report.json"`
+   (`USD_ASSET_GATE_PATHS`, `USD_ASSET_GATE_CONFIG` and `USD_ASSET_GATE_FAIL_ON` adjust it;
+   without `BASE_SHA` it checks the given paths or the whole repository);
+4. runs `usd-asset-gate comment --from …` unless `USD_ASSET_GATE_COMMENT=false`; a comment
+   failure becomes a warning annotation and never changes the result;
+5. exits with the `check` exit code.
 
 The token is passed through `http.extraheader` for the fetch only and is never written into
-`.git/config`.
+`.git/config`; this repository's dogfood workflow asserts that after the run.
 
 ## Dependencies
 
@@ -354,8 +366,16 @@ is opt-in and never imported by the core.
   update, "all clear" edit and the 403 fork case.
 - **Version matrix**: CI runs on the minimum and latest supported `usd-core`, so upstream
   validator changes show up as test failures rather than surprises.
-- **Dogfooding**: this repository's own workflow runs the local-only mode against
-  `tests/fixtures/pass/` (must pass) and `tests/fixtures/fail/` (must fail).
+- **Dogfooding**: `.github/workflows/usd-gate.yml` runs the local-only mode exactly as a
+  consumer would (plain-git checkout, `bash ci/usd-asset-gate.sh`, PR comment) on the USD
+  files a pull request changes, using this repository's `.usd-asset-gate.yml` (which
+  includes only `tests/fixtures/pass/**`). It then checks all of `tests/fixtures/pass/`
+  (must pass), every `tests/fixtures/fail/<case>/` with its own config (each must exit 1),
+  and that no `http.extraheader` was left in `.git/config`. A second job runs the composite
+  action from the checkout (`uses: ./`). Fail cases whose defect is only a violation of
+  their own config (`wrong_meters_per_unit`, `wrong_kind`, `over_prim_budget`,
+  `low_instancing`) would pass under the repository config if moved into `pass/`; every
+  other fail case would turn the pass step red.
 
 ## Post-MVP roadmap
 

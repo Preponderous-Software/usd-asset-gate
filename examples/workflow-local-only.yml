@@ -1,0 +1,46 @@
+# Local-only mode: no `uses:` lines at all.
+#
+# For organisations whose policy allows only actions defined in their own
+# repositories. Copy ci/usd-asset-gate.sh from
+# https://github.com/Preponderous-Software/usd-asset-gate into this repository
+# (MIT-licensed, short enough to review) and save this file as
+# .github/workflows/usd-asset-gate.yml.
+#
+# Triggered by pull_request, never pull_request_target: on a pull request from a
+# fork the token is read-only, so the PR comment is skipped and the results stay in
+# the log, the annotations and the job summary.
+name: USD asset gate
+
+on:
+  pull_request:
+    paths: ["**/*.usd", "**/*.usda", "**/*.usdc", "**/*.usdz", ".usd-asset-gate.yml"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  usd-gate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout (plain git)
+        env:
+          TOKEN: ${{ github.token }}
+        # The token is passed as a one-off http.extraheader for the fetch only and is
+        # never written to .git/config.
+        run: |
+          git init -q .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)" \
+            fetch -q --no-tags origin "${{ github.event.pull_request.base.sha }}" "${GITHUB_SHA}"
+          git checkout -q --detach "${GITHUB_SHA}"
+
+      - name: USD asset gate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          USD_CORE_VERSION: "26.8"
+          # Pin what pip installs: a released version once published, a vendored
+          # source tree (./vendor/usd-asset-gate), or a git URL at a commit SHA.
+          USD_ASSET_GATE_SPEC: git+https://github.com/Preponderous-Software/usd-asset-gate@main
+        run: bash ci/usd-asset-gate.sh

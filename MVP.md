@@ -1,6 +1,6 @@
 # usd-asset-gate — MVP
 
-> Status: planning. See [CONCEPT.md](CONCEPT.md) for the why and
+> Status: implemented — milestones M1–M8 are done (see the issues). See [CONCEPT.md](CONCEPT.md) for the why and
 > [ARCHITECTURE.md](ARCHITECTURE.md) for the how.
 
 ## The smallest end-to-end slice

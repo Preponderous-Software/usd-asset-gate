@@ -5,7 +5,7 @@ It runs OpenUSD's own validators plus your **house rules** on every pull request
 
 It ships as a **plain CLI** that runs anywhere Python runs, and as a **GitHub Action** that can also be used in organisations that allow no third-party actions.
 
-> **Status: in development — not yet usable as a gate.** The package skeleton, CLI, finding model and text/JSON output (milestone M1), the in-process OpenUSD validator adapter (M2) and the `.usd-asset-gate.yml` configuration with its rule engine and aliases (M3), the stage-metadata, default-prim kind and file-size house rules (M4), the budget and naming rules (M5), changed-file discovery with GitHub annotations and job-summary output (M6), and the single in-place PR comment (M7) exist; the GitHub Action and copy-in script are still being built, milestone by milestone, from the MVP issue list. Features below are the MVP scope, not current behaviour.
+> **Status: MVP implemented.** Every MVP milestone (M1–M8) is done: the CLI, the in-process OpenUSD validators, house rules, YAML config, changed-file discovery, annotations, job summary, the single PR comment, the composite action and the local-only copy-in script. It is **not yet published** to PyPI or the GitHub Marketplace (planned after the MVP), so install it from this repository for now.
 
 ---
 
@@ -91,7 +91,7 @@ The MVP is defined in [`MVP.md`](MVP.md) and tracked as issues labelled `mvp`.
 
 ## 📂 Project Structure
 
-Planned layout:
+Layout:
 
 usd-asset-gate/  
  ├── usd_asset_gate/          # Python package  
@@ -106,6 +106,7 @@ usd-asset-gate/
  ├── schema/                 # JSON Schema for .usd-asset-gate.yml  
  ├── ci/usd-asset-gate.sh     # copy-in script for local-only CI  
  ├── action.yml               # composite GitHub Action  
+ ├── examples/                # workflows for both modes  
  ├── tests/fixtures/          # USD files that must pass or fail  
  ├── CONCEPT.md               # Problem, audience, non-goals, prior art  
  ├── MVP.md                   # MVP scope, acceptance criteria, milestones  
@@ -116,13 +117,47 @@ usd-asset-gate/
 
 ## 🚀 Getting Started
 
-Not available yet. The intended usage is:
+Until the PyPI release, install from the repository (pin a commit for CI):
 
 ```bash
-pip install usd-core usd-asset-gate
-usd-asset-gate check assets/
-usd-asset-gate check --changed-since origin/main --format github
+python -m venv .venv && . .venv/bin/activate      # Python 3.10+
+pip install usd-core "git+https://github.com/Preponderous-Software/usd-asset-gate@main"
+
+usd-asset-gate check assets/                                   # files or directories
+usd-asset-gate check --changed-since origin/main --format github \
+  --summary "$GITHUB_STEP_SUMMARY" --json report.json           # what CI runs
+usd-asset-gate rules                                           # every rule and its setting
+usd-asset-gate comment --from report.json                      # the one PR comment (in CI)
 ```
+
+Exit codes: `0` pass, `1` findings at or above `fail_on`, `2` usage or config error.
+
+Add a `.usd-asset-gate.yml` at the repository root to set house rules (every key is
+optional; the full schema is in [`ARCHITECTURE.md`](ARCHITECTURE.md#configuration-schema)
+and [`schema/usd-asset-gate.schema.json`](schema/usd-asset-gate.schema.json)):
+
+```yaml
+version: 1
+include: ["assets/**"]
+rules:
+  stage-metadata: { metersPerUnit: 0.01, upAxis: "Y" }
+  default-prim: { kind: component }
+  file-size: { max_bytes: { default: 50MB, .usdz: 200MB } }
+  prim-budget: { max_prims: 5000 }
+```
+
+**In GitHub Actions**, pick one:
+
+- **Composite action** — [`examples/workflow-action.yml`](examples/workflow-action.yml):
+  `uses: Preponderous-Software/usd-asset-gate@<commit-sha>` after a checkout that reaches
+  the PR's base commit. The action runs only `bash` and `pip`.
+- **Local-only, no `uses:` at all** — copy [`ci/usd-asset-gate.sh`](ci/usd-asset-gate.sh)
+  into your repository and use [`examples/workflow-local-only.yml`](examples/workflow-local-only.yml),
+  which checks out with plain `git` (the token travels as a one-off `http.extraheader` and
+  is never written to `.git/config`).
+
+Both run on `pull_request` (never `pull_request_target`); on pull requests from forks the
+comment is skipped and the results stay in the log, annotations and job summary.
 
 ---
 
