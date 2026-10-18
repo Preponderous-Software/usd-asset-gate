@@ -1,0 +1,23 @@
+# Throwaway probe (not for merge): run the composite action from a full-SHA pin.
+name: SHA pin probe
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  pinned:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout (plain git)
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          git init -q .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)" \
+            fetch -q --no-tags origin "${{ github.event.pull_request.base.sha }}" "${GITHUB_SHA}"
+          git checkout -q --detach "${GITHUB_SHA}"
+      - uses: Preponderous-Software/usd-asset-gate@85c1d111ae82243336e8d4cb6c87707d6bdb2343
+        with:
+          base-sha: "531ca365316f35991f1c1250a422ec12db4e8a9e"  # first commit: every pass fixture counts as changed
+          paths: tests/fixtures/pass
+          comment: "false"
