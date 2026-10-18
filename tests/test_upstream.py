@@ -182,11 +182,49 @@ def test_transient_validation_failure_recovers():
     assert [e.GetName() for e in errors] == ["MissingDefaultPrim"]
 
 
+class _FakeLayer:
+    def __init__(self, identifier):
+        self.identifier = identifier
+
+
+class _FakeSite:
+    def __init__(self, layer=None, prim=None):
+        self._layer, self._prim = layer, prim
+
+    def IsProperty(self):
+        return False
+
+    def IsPrim(self):
+        return self._prim is not None
+
+    def GetPrim(self):
+        return self._prim
+
+    def GetLayer(self):
+        return self._layer
+
+
+class _FakeStage:
+    def __init__(self, root):
+        self._root = _FakeLayer(root)
+
+    def GetRootLayer(self):
+        return self._root
+
+
+class _FakeError:
+    def __init__(self, sites):
+        self._sites = sites
+
+    def GetSites(self):
+        return self._sites
+
+
 def test_layer_site_outside_root_is_reported_relative(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    sub = Sdf.Layer.CreateNew(str(tmp_path / "sub.usda"))
-    sub.Save()
-    root = tmp_path / "root.usda"
-    root.write_text('#usda 1.0\n(\n    subLayers = [@./sub.usda@]\n)\n')
-    ctx, findings = check_file("root.usda")
-    assert all(not (f.layer or "").startswith("/") for f in findings)
+    root = str(tmp_path / "root.usda")
+    ctx = AssetContext(path="root.usda", abs_path=root, stage=_FakeStage(root))
+    error = _FakeError([_FakeSite(layer=_FakeLayer(root)), _FakeSite(layer=_FakeLayer(str(tmp_path / "sub" / "a.usda")))])
+    assert upstream._sites(ctx, error) == (None, "sub/a.usda")
+    # The root layer itself is never repeated as "layer".
+    assert upstream._sites(ctx, _FakeError([_FakeSite(layer=_FakeLayer(root))])) == (None, None)

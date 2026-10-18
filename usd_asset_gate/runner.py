@@ -7,7 +7,7 @@ from typing import Iterable
 
 from .model import Finding, Report, Severity, sort_findings
 from .rules import upstream
-from .stage import AssetContext, open_stage
+from .stage import AssetContext, normalize_diagnostic, open_stage
 
 #: Rule ID reported when a file cannot be opened as a USD stage at all.
 STAGE_OPEN_RULE = "stage-open"
@@ -50,7 +50,9 @@ def run(
         ctx, file_findings = check_file(path, upstream_names)
         findings.extend(file_findings)
         if ctx.diagnostics:
-            diagnostics[path] = [ctx.relativize(line) for line in ctx.diagnostics]
+            diagnostics[path] = [
+                normalize_diagnostic(ctx.relativize(line)) for line in ctx.diagnostics
+            ]
     return Report(
         files=list(files),
         findings=sort_findings(findings),

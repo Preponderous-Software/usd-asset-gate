@@ -118,3 +118,25 @@ def test_rules_subcommand_lists_rules(cli):
     code, out, _ = cli("rules", "--format", "json")
     assert code == 0
     assert any(r["rule"] == "stage-open" for r in json.loads(out)["rules"])
+
+
+def test_tf_error_messages_keep_spaces_inside_paths():
+    from usd_asset_gate.stage import tf_error_messages
+
+    exc = Exception(
+        "\n\tError in 'A' at line 1 in file a.cpp : 'Failed to open layer @/tmp/my  assets/x.usda@'"
+        "\n\tError in 'B' at line 2 in file b.h : '/tmp/my  assets/x.usda:4:1: Expected }\n'"
+    )
+    assert tf_error_messages(exc) == [
+        "Failed to open layer @/tmp/my  assets/x.usda@",
+        "/tmp/my  assets/x.usda:4:1: Expected }",
+    ]
+
+
+def test_diagnostics_drop_per_run_stage_addresses():
+    from usd_asset_gate.stage import normalize_diagnostic
+
+    a = "Warning: Could not open asset @x.usda@ (instantiating stage on stage @a.usda@ <0x361c760>)"
+    b = "Warning: Could not open asset @x.usda@ (instantiating stage on stage @a.usda@ <0x7f00aa12>)"
+    assert normalize_diagnostic(a) == normalize_diagnostic(b)
+    assert normalize_diagnostic(a).endswith("(instantiating stage on stage @a.usda@)")
