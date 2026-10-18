@@ -48,9 +48,11 @@ shell layer, so the same core runs from a laptop, a pre-commit hook or any CI sy
 
 1. **Config.** Load `.usd-asset-gate.yml` from the repo root (or `--config`). Unknown keys or
    wrong types stop the run with exit 2 before any asset is opened.
-2. **Discovery.** Resolve the file list. In PR mode: `git diff --name-only
-   --diff-filter=ACMR <base>...HEAD`, keep `*.usd, *.usda, *.usdc, *.usdz`, apply
-   `include`/`exclude`. Deleted files are ignored.
+2. **Discovery.** Resolve the file list. In PR mode (`--changed-since <ref>`): `git diff
+   --name-only -z --diff-filter=ACMR <ref>...HEAD`, keep `*.usd, *.usda, *.usdc, *.usdz`
+   (case-insensitive), apply `include`/`exclude`, and, when paths are also given, keep only
+   files under them. Deleted files are ignored. A ref that is not in the clone exits 2 with
+   a `git fetch` hint.
 3. **Per file** (one file at a time in the MVP; OpenUSD's validation context runs the
    validators for that file in parallel):
    1. `file-size` is checked from `os.stat` *before* opening, so a huge file fails fast.
@@ -238,10 +240,10 @@ Resolution rules, as implemented:
 
 | Output | Flag | Notes |
 |---|---|---|
-| Text | default | `path:prim: severity rule: message`, coloured on a TTY. |
-| JSON | `--format json` | `{ "version": 1, "files": [...], "findings": [...], "summary": {...} }`; stable, documented, used by the comment step. |
-| GitHub annotations | `--format github` | `::error file=<path>,line=<n>,title=<rule>::<message>` workflow commands. GitHub shows a limited number of annotations per step, so the reporter prints the most severe first and a "N more in the job summary" notice. |
-| Job summary | `--summary <file>` | Appends Markdown to `$GITHUB_STEP_SUMMARY`: totals, a per-file table, collapsible details. Truncates under GitHub's per-step summary size limit with a pointer to the JSON artifact. |
+| Text | default | `path[:line][:prim]: severity rule: message [code]` plus a PASS/FAIL line, coloured on a TTY (`NO_COLOR` respected). |
+| JSON | `--format json`, or `--json <file>` alongside any format | `{ "version": 1, "tool": {...}, "files": [{path, findings, diagnostics}], "findings": [...], "summary": {...} }`; stable, documented, used by the comment step. |
+| GitHub annotations | `--format github` | `::error` / `::warning` / `::notice` `file=<path>,line=<n>,title=usd-asset-gate: <rule>::<message>` workflow commands, escaped as `@actions/toolkit` does (`%`, CR, LF in data; also `:` and `,` in properties), followed by the text report for the log. GitHub shows only a limited number of annotations per step and the workflow-commands page does not state the number (checked 2026-10-18), so the reporter emits the most severe first, at most 10 per severity by default (`--max-annotations N`), then one notice counting the rest. `line` is filled best-effort for `.usda` root layers by scanning for the prim's `def`/`over`/`class` line. |
+| Job summary | `--summary <file>` | Appends Markdown to `$GITHUB_STEP_SUMMARY`: verdict and totals, a table of files with findings, a count of clean files, and a findings table in a `<details>` block. GitHub limits each step's summary to 1 MiB (workflow-commands docs, checked 2026-10-18); the renderer keeps under 960 KiB by dropping finding rows and saying how many were left out. |
 | PR comment | `usd-asset-gate comment --from report.json` | One comment per PR, found by the hidden marker `<!-- usd-asset-gate:report -->` and edited with `PATCH /repos/{owner}/{repo}/issues/comments/{id}`; created with `POST …/issues/{n}/comments` if absent. When all findings clear, the comment is edited to a short "all checks pass" note, not deleted, so the history stays readable. Requires `pull-requests: write` (or `issues: write`). On `403` (for example, a PR from a fork, where `GITHUB_TOKEN` is read-only) it logs why and exits 0; the log, annotations and job summary still carry the results. `pull_request_target` is never used to work around this (see [Decisions](#decisions)). |
 
 ## Running in GitHub Actions

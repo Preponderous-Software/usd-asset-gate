@@ -115,3 +115,39 @@ def open_stage(ctx: AssetContext) -> list[str]:
         return [f"Usd.Stage.Open returned no stage for {ctx.path}"]
     ctx.stage = stage
     return []
+
+
+_PRIM_LINE_RE = r'^[ \t]*(?:def|over|class)\b[^"\n]*"{name}"'
+
+
+def usda_prim_line(text: str, prim_path: str) -> int | None:
+    """Best-effort 1-based line of the spec that introduces ``prim_path`` in usda text.
+
+    Walks the path one name at a time, searching forward from the previous match for
+    a ``def``/``over``/``class`` line naming it. Property paths use their prim.
+    Returns None when a name cannot be found (e.g. the prim comes from another layer).
+    """
+    prim_path = prim_path.split(".", 1)[0]
+    names = [n for n in prim_path.split("/") if n]
+    if not names:
+        return None
+    pos = 0
+    match = None
+    for name in names:
+        match = re.compile(_PRIM_LINE_RE.format(name=re.escape(name)), re.M).search(text, pos)
+        if match is None:
+            return None
+        pos = match.end()
+    return text.count("\n", 0, match.start()) + 1 if match else None
+
+
+def read_usda_text(abs_path: str) -> str | None:
+    """The file's text if it is a usda text layer (by header), else None."""
+    try:
+        with open(abs_path, "rb") as fh:
+            head = fh.read(8)
+            if not head.startswith(b"#usda"):
+                return None
+            return (head + fh.read()).decode("utf-8", errors="replace")
+    except OSError:
+        return None

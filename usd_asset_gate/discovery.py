@@ -101,3 +101,66 @@ def filter_paths(
             continue
         kept.append(p)
     return kept
+
+
+def _git(args: list[str], cwd: str | None = None) -> str:
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            ["git", *args], cwd=cwd, capture_output=True, text=True, check=False
+        )
+    except FileNotFoundError:
+        raise DiscoveryError("git is not installed or not on PATH") from None
+    if proc.returncode != 0:
+        detail = proc.stderr.strip() or f"exit code {proc.returncode}"
+        raise DiscoveryError(f"git {' '.join(args)} failed: {detail}")
+    return proc.stdout
+
+
+def changed_files(ref: str) -> list[str]:
+    """USD files added, copied, modified or renamed between ``ref`` and ``HEAD``.
+
+    Uses ``git diff --name-only --diff-filter=ACMR <ref>...HEAD`` (three dots: the
+    changes on this branch since it left ``ref``). Deleted files are never listed.
+    Paths are returned relative to the working directory, forward-slashed.
+    """
+    import subprocess
+
+    try:
+        known = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        raise DiscoveryError("git is not installed or not on PATH") from None
+    if known.returncode != 0:
+        raise DiscoveryError(
+            f"--changed-since: ref {ref!r} is not present in this clone; fetch it first, "
+            f"for example: git fetch origin {ref}"
+        )
+    top = _git(["rev-parse", "--show-toplevel"]).strip()
+    out = _git(
+        ["diff", "--name-only", "-z", "--diff-filter=ACMR", f"{ref}...HEAD"], cwd=top
+    )
+    files = []
+    for name in out.split("\0"):
+        if not name or not is_usd_file(name):
+            continue
+        full = os.path.join(top, name)
+        if os.path.isfile(full):
+            files.append(display_path(full))
+    return sorted(set(files))
+
+
+def under_any(path: str, roots: list[str]) -> bool:
+    """True when ``path`` is one of ``roots`` or inside one of them (display paths)."""
+    for root in roots:
+        root = display_path(root).rstrip("/")
+        if root in ("", "."):
+            return True
+        if path == root or path.startswith(root + "/"):
+            return True
+    return False
