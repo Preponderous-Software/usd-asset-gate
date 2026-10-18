@@ -5,6 +5,10 @@ It runs OpenUSD's own validators plus your **house rules** on every pull request
 
 It ships as a **plain CLI** that runs anywhere Python runs, and as a **GitHub Action** that can also be used in organisations that allow no third-party actions.
 
+![The gate's Markdown report for four test fixtures, rendered by GitHub: three files fail with four errors](docs/images/summary.png)
+
+*The report the gate writes as the job summary and posts as its single PR comment, from a real run on four files in `tests/fixtures/` and rendered by GitHub's Markdown API. A live comment, edited in place from red to green, is on [#18](https://github.com/Preponderous-Software/usd-asset-gate/pull/18#issuecomment-6245303836).*
+
 > **Status: MVP implemented.** Every MVP milestone (M1–M8) is done: the CLI, the in-process OpenUSD validators, house rules, YAML config, changed-file discovery, annotations, job summary, the single PR comment, the composite action and the local-only copy-in script. It is **not yet published** to PyPI or the GitHub Marketplace (planned after the MVP), so install it from this repository for now.
 
 ---
@@ -129,6 +133,12 @@ usd-asset-gate check --changed-since origin/main --format github \
 usd-asset-gate rules                                           # every rule and its setting
 usd-asset-gate comment --from report.json                      # the one PR comment (in CI)
 ```
+
+The same run in a terminal (`--format text`, the default):
+
+![usd-asset-gate check on four fixtures: three error findings and a FAIL line](docs/images/cli.png)
+
+Both images are regenerated from the fixtures by [`docs/capture_readme.py`](docs/capture_readme.py).
 
 Exit codes: `0` pass, `1` findings at or above `fail_on`, `2` usage or config error.
 
