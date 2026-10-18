@@ -1,6 +1,9 @@
 {
   "description": "A stage with no defaultPrim.",
   "findings": [
-    {"rule": "upstream:usdValidation:StageMetadataChecker", "code": "MissingDefaultPrim"}
+    {
+      "rule": "default-prim",
+      "code": "MissingDefaultPrim"
+    }
   ]
 }

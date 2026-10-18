@@ -1,7 +1,9 @@
 {
-  "description": "A sublayer that does not exist.",
+  "description": "A sublayer that does not exist. Two upstream validators detect it; it is reported once, under the alias.",
   "findings": [
-    {"rule": "upstream:usdValidation:CompositionErrorTest", "code": "CompositionError"},
-    {"rule": "upstream:usdUtilsValidators:MissingReferenceValidator", "code": "UnresolvableDependency"}
+    {
+      "rule": "unresolved-sublayers",
+      "code": "UnresolvableDependency"
+    }
   ]
 }

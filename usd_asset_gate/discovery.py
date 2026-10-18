@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import re
+from typing import Iterable
 
 #: File extensions treated as USD assets (compared case-insensitively).
 USD_EXTENSIONS = (".usd", ".usda", ".usdc", ".usdz")
@@ -52,3 +54,50 @@ def expand_paths(paths: list[str]) -> list[tuple[str, bool]]:
         else:
             raise DiscoveryError(f"no such file or directory: {raw}")
     return sorted(found.items())
+
+
+def glob_to_regex(pattern: str) -> "re.Pattern[str]":
+    """Compile a path glob: ``**`` spans directories, ``*`` and ``?`` stay in one segment.
+
+    Patterns match the whole forward-slash path relative to the working directory;
+    ``**/`` also matches zero directories, so ``**/*.usda`` matches ``a.usda``.
+    """
+    i, out = 0, []
+    while i < len(pattern):
+        c = pattern[i]
+        if pattern.startswith("**/", i):
+            out.append("(?:.*/)?")
+            i += 3
+        elif pattern.startswith("**", i):
+            out.append(".*")
+            i += 2
+        elif c == "*":
+            out.append("[^/]*")
+            i += 1
+        elif c == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(c))
+            i += 1
+    return re.compile("".join(out) + r"\Z")
+
+
+def matches_glob(path: str, patterns: Iterable[str]) -> bool:
+    return any(glob_to_regex(p).match(path) for p in patterns)
+
+
+def filter_paths(
+    paths: Iterable[str], include: Iterable[str] | None, exclude: Iterable[str]
+) -> list[str]:
+    """Keep paths matching any ``include`` glob (all when None) and no ``exclude`` glob."""
+    include = list(include) if include is not None else None
+    exclude = list(exclude)
+    kept = []
+    for p in paths:
+        if include is not None and not matches_glob(p, include):
+            continue
+        if matches_glob(p, exclude):
+            continue
+        kept.append(p)
+    return kept

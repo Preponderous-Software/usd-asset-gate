@@ -1,0 +1,275 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Preponderous-Software/usd-asset-gate/main/schema/usd-asset-gate.schema.json",
+  "title": "usd-asset-gate configuration (.usd-asset-gate.yml)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "enum": [
+        1
+      ]
+    },
+    "include": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Path globs to check (default: every USD file)."
+    },
+    "exclude": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Path globs never to check."
+    },
+    "fail_on": {
+      "enum": [
+        "error",
+        "warning",
+        "info",
+        "never"
+      ]
+    },
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "validators": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Validator names or globs to run (default: all)."
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Run validators carrying any of these keywords."
+        },
+        "disable": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Validator names or globs to skip."
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "description": "Per-rule settings, keyed by rule ID.",
+      "x-unknown-label": "rule",
+      "properties": {
+        "unresolved-references": {
+          "type": "object",
+          "description": "References and payloads that point at files which cannot be found (usdUtilsValidators:MissingReferenceValidator, usdValidation:CompositionErrorTest).",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "warning",
+                "error"
+              ]
+            }
+          }
+        },
+        "unresolved-sublayers": {
+          "type": "object",
+          "description": "Sublayers that cannot be loaded (usdValidation:CompositionErrorTest, usdUtilsValidators:MissingReferenceValidator).",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "warning",
+                "error"
+              ]
+            }
+          }
+        },
+        "default-prim": {
+          "type": "object",
+          "description": "The stage has a valid defaultPrim (usdValidation:StageMetadataChecker).",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "warning",
+                "error"
+              ]
+            }
+          }
+        },
+        "stage-metadata": {
+          "type": "object",
+          "description": "upAxis and metersPerUnit are authored (usdGeomValidators:StageMetadataChecker).",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "warning",
+                "error"
+              ]
+            }
+          }
+        }
+      },
+      "patternProperties": {
+        "^upstream:[^:]+:[^:]+$": {
+          "type": "object",
+          "description": "One OpenUSD validator, by its registry name.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "warning",
+                "error"
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "overrides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "paths"
+        ],
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rules": {
+            "type": "object",
+            "description": "Per-rule settings, keyed by rule ID.",
+            "x-unknown-label": "rule",
+            "properties": {
+              "unresolved-references": {
+                "type": "object",
+                "description": "References and payloads that point at files which cannot be found (usdUtilsValidators:MissingReferenceValidator, usdValidation:CompositionErrorTest).",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "severity": {
+                    "enum": [
+                      "info",
+                      "warning",
+                      "error"
+                    ]
+                  }
+                }
+              },
+              "unresolved-sublayers": {
+                "type": "object",
+                "description": "Sublayers that cannot be loaded (usdValidation:CompositionErrorTest, usdUtilsValidators:MissingReferenceValidator).",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "severity": {
+                    "enum": [
+                      "info",
+                      "warning",
+                      "error"
+                    ]
+                  }
+                }
+              },
+              "default-prim": {
+                "type": "object",
+                "description": "The stage has a valid defaultPrim (usdValidation:StageMetadataChecker).",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "severity": {
+                    "enum": [
+                      "info",
+                      "warning",
+                      "error"
+                    ]
+                  }
+                }
+              },
+              "stage-metadata": {
+                "type": "object",
+                "description": "upAxis and metersPerUnit are authored (usdGeomValidators:StageMetadataChecker).",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "severity": {
+                    "enum": [
+                      "info",
+                      "warning",
+                      "error"
+                    ]
+                  }
+                }
+              }
+            },
+            "patternProperties": {
+              "^upstream:[^:]+:[^:]+$": {
+                "type": "object",
+                "description": "One OpenUSD validator, by its registry name.",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "severity": {
+                    "enum": [
+                      "info",
+                      "warning",
+                      "error"
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  }
+}

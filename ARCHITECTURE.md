@@ -39,7 +39,7 @@ shell layer, so the same core runs from a laptop, a pre-commit hook or any CI sy
 | Stage loader | `stage.py` | Open each file once (`Usd.Stage.Open`), capture composition diagnostics, compute stats once, hand a shared `AssetContext` to every rule. |
 | Upstream adapter | `rules/upstream.py` | Build a `UsdValidation.ValidationContext` from the selected validators, run it, map `ValidationError` to `Finding`. |
 | House rules | `rules/house/*.py` | One module per rule (`stage_metadata`, `default_prim`, `file_size`, `prim_budget`, `instance_budget`, `prim_naming`). |
-| Rule registry | `rules/registry.py` | Rule IDs, defaults, parameter schemas, the alias table to upstream validators. |
+| Rule registry | `rules/registry.py` | Rule IDs, defaults, parameter schemas, the alias table to upstream validators (each alias *claims* specific upstream errors). |
 | Reporters | `report/{text,json,github,summary}.py` | Render findings for each output. |
 | PR commenter | `report/comment.py` | Create-or-update one PR comment with `urllib.request`. |
 | Shell layer | `action.yml`, `ci/usd-asset-gate.sh` | Checkout, install, invoke the CLI; no logic beyond plumbing. |
@@ -114,7 +114,11 @@ search OpenUSD docs for it.
   | `stage-metadata` | `usdGeomValidators:StageMetadataChecker` (presence), plus house value checks |
 
   When both an alias and its upstream validator are enabled, the finding is reported once,
-  under the alias.
+  under the alias. An enabled alias runs the validators it claims even when `upstream`
+  selection leaves them out; a disabled alias hands those errors back to the upstream rule
+  (if selected), so silencing a check entirely means disabling both. `unresolved-*` findings
+  are grouped by the unresolved asset path and carry the code `UnresolvableDependency`;
+  `default-prim` and `stage-metadata` keep the upstream code.
 - **House rules only add what upstream lacks.** Upstream checks that `upAxis` and
   `metersPerUnit` are *present*; the house rule checks they have the *required values*.
   Budgets, naming and file size have no upstream equivalent.
@@ -137,6 +141,7 @@ fail_on: error                      # error | warning | info | never
 
 upstream:
   enabled: true
+  validators: []                     # names or globs to run; empty with no keywords = all
   keywords: [UsdCoreValidators, UsdGeomValidators, UsdShadeValidators, UsdUtilsValidators]
   disable: ["usdPhysicsValidators:*"]   # names or globs
 
@@ -176,9 +181,31 @@ overrides:
       prim-budget: { max_prims: 2000000 }
 ```
 
-The schema is defined once in Python (`config.py`) and published as JSON Schema
-(`schema/usd-asset-gate.schema.json`) for editor completion. Validation uses the standard
-library only, so the runtime dependencies stay at `usd-core` and `PyYAML`.
+The schema is defined once in Python (`config.py`, built from the rule registry) and
+published as JSON Schema (`schema/usd-asset-gate.schema.json`, regenerated with
+`python -m usd_asset_gate.config`; a test fails when the two drift) for editor completion.
+Validation uses the standard library only, so the runtime dependencies stay at `usd-core`
+and `PyYAML`. Errors name the key path, for example
+`rules.prim-budget.max_prims: expected integer, got string` or
+`rules.prim-budgt: unknown rule`, and exit 2.
+
+Resolution rules, as implemented:
+
+- **File lookup.** `--config <file>`, else `.usd-asset-gate.yml` in the working directory,
+  else built-in defaults. An empty file means defaults.
+- **Upstream names.** Exact validator names under `upstream.validators`/`upstream.disable`
+  and `upstream:<plugin>:<validator>` keys under `rules` must exist in the installed
+  `usd-core`; globs may match nothing. A rule entry `{enabled: true}` adds a validator the
+  selection left out, `{enabled: false}` removes one.
+- **Globs.** `include`, `exclude` and `overrides[].paths` match the whole forward-slash path
+  relative to the working directory; `**` spans directories (`**/` also matches none),
+  `*` and `?` stay within one path segment. `include`/`exclude` filter files found by
+  walking a directory (and, from M6, changed files); a file named explicitly on the command
+  line is always checked.
+- **Overrides.** Defaults, then `rules`, then every matching `overrides` entry in file
+  order; each layer replaces settings key by key, one level deep (a whole `max_by_type`
+  mapping is replaced, not merged).
+- **`fail_on`.** `--fail-on` on the command line beats the config value.
 
 ## Output formats
 

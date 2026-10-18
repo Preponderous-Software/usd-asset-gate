@@ -1,7 +1,9 @@
 {
-  "description": "A reference to a file that was never committed.",
+  "description": "A reference to a file that was never committed. Two upstream validators detect it; it is reported once, under the alias.",
   "findings": [
-    {"rule": "upstream:usdValidation:CompositionErrorTest", "code": "CompositionError"},
-    {"rule": "upstream:usdUtilsValidators:MissingReferenceValidator", "code": "UnresolvableDependency"}
+    {
+      "rule": "unresolved-references",
+      "code": "UnresolvableDependency"
+    }
   ]
 }

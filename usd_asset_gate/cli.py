@@ -6,6 +6,7 @@ Exit codes: 0 pass, 1 findings at or above ``fail_on``, 2 usage or config error.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from typing import Sequence
 
@@ -53,8 +54,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", metavar="<command>")
     sub.required = True
 
+    config_help = "config file (default: .usd-asset-gate.yml in the working directory, if any)"
+
     check = sub.add_parser("check", help="check USD files and directories")
     check.add_argument("paths", nargs="*", metavar="PATH", help="files or directories to check")
+    check.add_argument("--config", metavar="FILE", help=config_help)
     check.add_argument(
         "--format",
         choices=("text", "json"),
@@ -65,7 +69,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--fail-on",
         choices=FAIL_ON_VALUES,
         default=None,
-        help="lowest severity that makes the run exit 1 (default: error)",
+        help="lowest severity that makes the run exit 1 (default: fail_on from the config, "
+        "else error)",
     )
     check.add_argument(
         "-v",
@@ -75,23 +80,58 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     rules = sub.add_parser("rules", help="list every available rule and its effective setting")
+    rules.add_argument("--config", metavar="FILE", help=config_help)
+    rules.add_argument(
+        "--path",
+        metavar="PATH",
+        help="show the settings that apply to this file (with per-path overrides)",
+    )
     rules.add_argument("--format", choices=("text", "json"), default="text")
     return parser
+
+
+def load_config(path: str | None):
+    """Load and fully validate the config; exits 2 (UsageError) before any asset is opened."""
+    from .config import ConfigError, check_upstream_names, load
+    from .rules import upstream
+
+    try:
+        config = load(path)
+        check_upstream_names(config, [v.name for v in upstream.all_validators()])
+    except ConfigError as exc:
+        raise UsageError(f"invalid config: {exc}") from None
+    return config
+
+
+def discover(paths: list[str], config) -> list[str]:
+    """Expand paths; directory contents are filtered by ``include``/``exclude``.
+
+    A file named explicitly on the command line is always checked.
+    """
+    from .discovery import filter_paths
+
+    try:
+        expanded = expand_paths(paths)
+    except DiscoveryError as exc:
+        raise UsageError(str(exc)) from None
+    explicit = [p for p, is_explicit in expanded if is_explicit]
+    walked = filter_paths(
+        [p for p, is_explicit in expanded if not is_explicit], config.include, config.exclude
+    )
+    return sorted(set(explicit) | set(walked))
 
 
 def cmd_check(args: argparse.Namespace) -> int:
     require_pxr()
     from .report import json as json_report
     from .report import text as text_report
-    from .runner import run
+    from .runner import Runner
 
+    config = load_config(args.config)
     if not args.paths:
         raise UsageError("no paths given (pass files or directories to check)")
-    try:
-        files = [path for path, _ in expand_paths(args.paths)]
-    except DiscoveryError as exc:
-        raise UsageError(str(exc)) from None
-    report = run(files, fail_on=args.fail_on or "error")
+    files = discover(args.paths, config)
+    report = Runner(config).run(files, fail_on=args.fail_on)
     if args.verbose:
         for path, lines in report.diagnostics.items():
             for line in lines:
@@ -103,18 +143,89 @@ def cmd_check(args: argparse.Namespace) -> int:
     return report.exit_code
 
 
+def rules_table(config, path: str | None) -> list[dict]:
+    """Every rule with its effective settings, in display order."""
+    from .rules import registry
+    from .runner import STAGE_OPEN_RULE, Runner
+    from .rules.upstream import RUN_FAILED_RULE
+
+    settings = config.rule_settings(path)
+    runner = Runner(config)
+    selected = runner._upstream_for(settings)
+    claimed_by = {}
+    for spec in registry.RULES:
+        for v in spec.claimed_validators:
+            claimed_by.setdefault(v, []).append(spec.id)
+    rows = [
+        {
+            "rule": STAGE_OPEN_RULE,
+            "kind": "builtin",
+            "enabled": True,
+            "severity": "error",
+            "description": "The file can be opened as a USD stage.",
+        },
+        {
+            "rule": RUN_FAILED_RULE,
+            "kind": "builtin",
+            "enabled": True,
+            "severity": "error",
+            "description": "OpenUSD could run the validators on the stage.",
+        },
+    ]
+    for spec in registry.RULES:
+        s = settings[spec.id]
+        params = {k: v for k, v in s.items() if k not in ("enabled", "severity")}
+        rows.append(
+            {
+                "rule": spec.id,
+                "kind": spec.kind,
+                "enabled": bool(s.get("enabled", True)),
+                "severity": s.get("severity", spec.severity.value),
+                "description": spec.description,
+                **({"params": params} if params else {}),
+            }
+        )
+    for info in runner.available:
+        s = settings.get(info.rule, {})
+        row = {
+            "rule": info.rule,
+            "kind": "upstream",
+            "enabled": info.name in selected,
+            "severity": s.get("severity", "as reported"),
+            "description": " ".join(info.doc.split()),
+            "keywords": list(info.keywords),
+        }
+        if info.name in claimed_by:
+            row["reported_under"] = claimed_by[info.name]
+        rows.append(row)
+    return rows
+
+
 def cmd_rules(args: argparse.Namespace) -> int:
     require_pxr()
     import json
 
-    from .runner import STAGE_OPEN_RULE
+    config = load_config(args.config)
+    from .discovery import display_path
 
-    rules = [{"rule": STAGE_OPEN_RULE, "enabled": True, "severity": "error"}]
+    path = display_path(args.path) if args.path else None
+    rows = rules_table(config, path)
     if args.format == "json":
-        sys.stdout.write(json.dumps({"rules": rules}, indent=2) + "\n")
-    else:
-        for r in rules:
-            sys.stdout.write(f"{r['rule']}: enabled, severity {r['severity']}\n")
+        payload = {"config": config.source, "path": path, "fail_on": config.fail_on, "rules": rows}
+        sys.stdout.write(json.dumps(payload, indent=2) + "\n")
+        return EXIT_PASS
+    sys.stdout.write(f"config: {config.source or '(defaults)'}\n")
+    if path:
+        sys.stdout.write(f"path: {path}\n")
+    sys.stdout.write(f"fail_on: {config.fail_on}\n\n")
+    for r in rows:
+        state = "enabled" if r["enabled"] else "disabled"
+        line = f"{r['rule']}  [{r['kind']}, {state}, severity {r['severity']}]"
+        if r.get("params"):
+            line += "  " + json.dumps(r["params"], sort_keys=True)
+        if r.get("reported_under"):
+            line += "  (claimed by " + ", ".join(r["reported_under"]) + " when enabled)"
+        sys.stdout.write(line + "\n")
     return EXIT_PASS
 
 
