@@ -14,6 +14,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
 PASS_DIR = FIXTURES / "pass"
 FAIL_DIR = FIXTURES / "fail"
+DEFAULT_CONFIG = FIXTURES / "default-config.yml"
 
 
 def pytest_configure(config):
@@ -28,6 +29,12 @@ def pytest_configure(config):
 
 def fail_cases() -> list[pathlib.Path]:
     return sorted(p for p in FAIL_DIR.iterdir() if (p / "expected.json").is_file())
+
+
+def case_config(case: pathlib.Path) -> pathlib.Path:
+    """A fail case's own ``.usd-asset-gate.yml`` if it has one, else the defaults."""
+    own = case / ".usd-asset-gate.yml"
+    return own if own.is_file() else DEFAULT_CONFIG
 
 
 def load_expected(case: pathlib.Path) -> dict:

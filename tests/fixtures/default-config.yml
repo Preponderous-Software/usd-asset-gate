@@ -1,0 +1,3 @@
+# The default configuration: tests pass this explicitly so a config file in the
+# working directory never changes what the fixture tests see.
+version: 1

@@ -9,7 +9,7 @@ from conftest import FAIL_DIR
 from usd_asset_gate.model import Severity
 from usd_asset_gate.rules import upstream
 from usd_asset_gate.runner import check_file, run
-from usd_asset_gate.stage import AssetContext
+from usd_asset_gate.stage import AssetContext, open_stage
 
 HAS_FIXERS_API = hasattr(UsdValidation.ValidationError, "GetFixers")
 
@@ -87,8 +87,22 @@ def test_keyword_selection_limits_findings():
     assert {f.rule for f in limited} == {"upstream:usdGeomValidators:StageMetadataChecker"}
 
 
-def test_error_maps_to_finding_fields():
-    ctx, findings = check_file(str(FAIL_DIR / "missing_reference" / "asset.usda"))
+def opened(path) -> AssetContext:
+    ctx = AssetContext(path=str(path), abs_path=str(path))
+    assert open_stage(ctx) == []
+    return ctx
+
+
+def all_names() -> list[str]:
+    return [v.name for v in upstream.all_validators()]
+
+
+def test_error_maps_to_finding_fields(monkeypatch):
+    from conftest import REPO_ROOT
+
+    monkeypatch.chdir(REPO_ROOT)
+    ctx = opened("tests/fixtures/fail/missing_reference/asset.usda")
+    findings = upstream.check(ctx, all_names())
     by_code = {f.code: f for f in findings}
     comp = by_code["CompositionError"]
     assert comp.rule == "upstream:usdValidation:CompositionErrorTest"
