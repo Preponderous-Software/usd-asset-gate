@@ -38,17 +38,34 @@ def capture_native_stderr(sink: list[str]) -> Iterator[None]:
             sink.extend(line for line in text.splitlines() if line.strip())
 
 
-_TF_ERROR_RE = re.compile(r"Error in '[^']*' at line \d+ in file [^:]+ : '(.*)'\s*$")
+_TF_ERROR_RE = re.compile(
+    r"Error in '[^']*' at line \d+ in file \S+ : '(.*?)'(?=\s*(?:Error in '|\Z))", re.S
+)
 
 
 def tf_error_messages(exc: BaseException) -> list[str]:
     """Pull the human-readable commentary out of a ``Tf.ErrorException``."""
-    messages = []
-    for line in str(exc).splitlines():
-        m = _TF_ERROR_RE.search(line.strip())
-        if m:
-            messages.append(m.group(1))
-    return messages or [str(exc).strip()]
+    messages = [_join_lines(m) for m in _TF_ERROR_RE.findall(str(exc))]
+    return messages or [_join_lines(str(exc))]
+
+
+def _join_lines(text: str) -> str:
+    """Join a multi-line message into one line without touching spaces inside a line.
+
+    Collapsing every whitespace run would rewrite paths such as ``my  assets/x.usda``.
+    """
+    return " ".join(line.strip() for line in text.splitlines() if line.strip())
+
+
+_STAGE_ADDRESS_RE = re.compile(r" <0x[0-9a-fA-F]+>")
+
+
+def normalize_diagnostic(line: str) -> str:
+    """Drop per-process stage addresses such as ``<0x361c760>`` from native output.
+
+    They differ on every run, which would make reports of an unchanged asset differ.
+    """
+    return _STAGE_ADDRESS_RE.sub("", line)
 
 
 @dataclass

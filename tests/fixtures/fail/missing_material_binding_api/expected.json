@@ -1,0 +1,6 @@
+{
+  "description": "A material binding authored without MaterialBindingAPI applied (OpenUSD offers a fixer for this from usd-core 26.x; it is reported, never applied).",
+  "findings": [
+    {"rule": "upstream:usdShadeValidators:MaterialBindingApiAppliedValidator", "code": "MissingMaterialBindingAPI"}
+  ]
+}

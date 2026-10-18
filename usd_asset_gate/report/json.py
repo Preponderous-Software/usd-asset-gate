@@ -5,7 +5,7 @@ Top-level shape (``version`` 1)::
     {
       "version": 1,
       "tool": {"name": "usd-asset-gate", "version": "..."},
-      "files": [{"path": "...", "findings": 0}],
+      "files": [{"path": "...", "findings": 0, "diagnostics": ["..."]}],
       "findings": [{"rule": ..., "code": ..., "severity": ..., "file": ..., ...}],
       "summary": {"files": 1, "error": 0, "warning": 0, "info": 0,
                   "fail_on": "error", "exit_code": 0, "passed": true}
@@ -31,7 +31,10 @@ def to_dict(report: Report) -> dict[str, Any]:
     return {
         "version": REPORT_VERSION,
         "tool": {"name": "usd-asset-gate", "version": __version__},
-        "files": [{"path": p, "findings": n} for p, n in per_file.items()],
+        "files": [
+            {"path": p, "findings": n, "diagnostics": report.diagnostics.get(p, [])}
+            for p, n in per_file.items()
+        ],
         "findings": [f.to_dict() for f in report.findings],
         "summary": {
             "files": len(report.files),
@@ -57,4 +60,5 @@ def from_dict(data: dict[str, Any]) -> Report:
         files=[entry["path"] for entry in data["files"]],
         findings=[Finding.from_dict(f) for f in data["findings"]],
         fail_on=data["summary"]["fail_on"],
+        diagnostics={e["path"]: list(e.get("diagnostics", [])) for e in data["files"]},
     )

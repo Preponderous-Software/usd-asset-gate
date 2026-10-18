@@ -1,0 +1,39 @@
+#usda 1.0
+(
+    defaultPrim = "Yard"
+    metersPerUnit = 1
+    subLayers = [
+        @./yard_lights.usda@
+    ]
+    upAxis = "Y"
+)
+
+def Xform "Yard" (
+    kind = "assembly"
+)
+{
+    def Xform "Stack" (
+        kind = "group"
+    )
+    {
+        def "CrateA" (
+            instanceable = true
+            kind = "component"
+            references = @./crate.usda@
+        )
+        {
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def "CrateB" (
+            instanceable = true
+            kind = "component"
+            references = @./crate.usda@
+        )
+        {
+            double3 xformOp:translate = (2, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+}

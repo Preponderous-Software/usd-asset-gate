@@ -1,0 +1,22 @@
+#usda 1.0
+(
+    defaultPrim = "Yard"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "Yard" (
+    kind = "assembly"
+)
+{
+    def Xform "Lights" (
+        kind = "group"
+    )
+    {
+        def SphereLight "Lamp"
+        {
+            float inputs:intensity = 10
+            float inputs:radius = 0.2
+        }
+    }
+}

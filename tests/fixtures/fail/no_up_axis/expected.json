@@ -1,0 +1,7 @@
+{
+  "description": "A stage with neither upAxis nor metersPerUnit authored.",
+  "findings": [
+    {"rule": "upstream:usdGeomValidators:StageMetadataChecker", "code": "MissingUpAxisMetadata"},
+    {"rule": "upstream:usdGeomValidators:StageMetadataChecker", "code": "MissingMetersPerUnitMetadata"}
+  ]
+}

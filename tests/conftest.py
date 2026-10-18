@@ -16,6 +16,16 @@ PASS_DIR = FIXTURES / "pass"
 FAIL_DIR = FIXTURES / "fail"
 
 
+def pytest_configure(config):
+    """Generate the binary fixtures before tests are collected."""
+    sys.path.insert(0, str(FIXTURES))
+    try:
+        import build
+    finally:
+        sys.path.remove(str(FIXTURES))
+    build.build()
+
+
 def fail_cases() -> list[pathlib.Path]:
     return sorted(p for p in FAIL_DIR.iterdir() if (p / "expected.json").is_file())
 

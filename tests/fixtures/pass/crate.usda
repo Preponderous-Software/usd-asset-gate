@@ -1,0 +1,17 @@
+#usda 1.0
+(
+    defaultPrim = "Crate"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "Crate" (
+    kind = "component"
+    references = @./pieces/lid.usda@
+)
+{
+    def Cube "Body"
+    {
+        double size = 1
+    }
+}
