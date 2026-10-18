@@ -67,6 +67,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="lowest severity that makes the run exit 1 (default: error)",
     )
+    check.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="also print the diagnostics OpenUSD wrote while opening and validating (stderr)",
+    )
 
     rules = sub.add_parser("rules", help="list every available rule and its effective setting")
     rules.add_argument("--format", choices=("text", "json"), default="text")
@@ -86,6 +92,10 @@ def cmd_check(args: argparse.Namespace) -> int:
     except DiscoveryError as exc:
         raise UsageError(str(exc)) from None
     report = run(files, fail_on=args.fail_on or "error")
+    if args.verbose:
+        for path, lines in report.diagnostics.items():
+            for line in lines:
+                sys.stderr.write(f"{path}: openusd: {line}\n")
     if args.format == "json":
         sys.stdout.write(json_report.render(report))
     else:

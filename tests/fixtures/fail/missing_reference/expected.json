@@ -1,0 +1,7 @@
+{
+  "description": "A reference to a file that was never committed.",
+  "findings": [
+    {"rule": "upstream:usdValidation:CompositionErrorTest", "code": "CompositionError"},
+    {"rule": "upstream:usdUtilsValidators:MissingReferenceValidator", "code": "UnresolvableDependency"}
+  ]
+}

@@ -51,12 +51,17 @@ shell layer, so the same core runs from a laptop, a pre-commit hook or any CI sy
 2. **Discovery.** Resolve the file list. In PR mode: `git diff --name-only
    --diff-filter=ACMR <base>...HEAD`, keep `*.usd, *.usda, *.usdc, *.usdz`, apply
    `include`/`exclude`. Deleted files are ignored.
-3. **Per file** (in a process pool; OpenUSD's own validation context also runs validators in
-   parallel):
+3. **Per file** (one file at a time in the MVP; OpenUSD's validation context runs the
+   validators for that file in parallel):
    1. `file-size` is checked from `os.stat` *before* opening, so a huge file fails fast.
-   2. Open the stage with a `Tf` diagnostic delegate / error mark active so composition
-      warnings ("Could not open asset …", "Could not load sublayer …") are captured rather
-      than only printed.
+   2. Open the stage with `Usd.Stage.Open`. A `Tf.ErrorException` (syntax error, missing
+      file, compressed `.usdz`) becomes a `stage-open` / `StageOpenFailed` finding. What
+      OpenUSD's C++ code prints to stderr while opening and validating — composition
+      warnings such as "Could not open asset …" or "Could not load sublayer …" — is
+      captured at file-descriptor level and kept per file as `diagnostics` in the JSON
+      report (printed with `check --verbose`) rather than only scrolling past in the log.
+      The composition problems themselves are reported as findings by the upstream
+      `usdValidation:CompositionErrorTest` validator.
    3. Compute `UsdUtils.ComputeUsdStageStats(stage)` once.
    4. Run the upstream adapter, then every enabled house rule, against the shared context.
 4. **Collect** `Finding`s, apply severity overrides, sort by file / severity / rule.
@@ -87,11 +92,18 @@ search OpenUSD docs for it.
   `check(ctx: AssetContext, params) -> Iterable[Finding]`. The upstream adapter is a single
   rule source that expands into one entry per OpenUSD validator in the registry, named
   `upstream:<plugin>:<validator>`.
+- **Upstream run failures.** `ValidationContext.Validate` is retried when OpenUSD raises a
+  `Tf` error from inside the validators (seen with `usd-core` 25.8 on 2026-10-17: a race
+  registering UsdShade connectable behaviour when validators run in parallel); if it keeps
+  failing, the file gets one `upstream` / `ValidationRunFailed` error finding.
+- **Fixers.** `fixer_available` is set when `ValidationError.GetFixers()` returns any fixer.
+  That method exists from `usd-core` 26.x (it is absent in 25.8, where the flag is always
+  false). Fixers are never applied.
 - **Upstream discovery is dynamic.** The adapter lists
   `UsdValidation.ValidationRegistry().GetAllValidatorMetadata()` at runtime, so new
   validators in newer `usd-core` releases appear without a release of this tool. In
   `usd-core` 26.8 the registry holds 28 validators (core, UsdGeom, UsdShade, UsdSkel,
-  UsdLux, UsdPhysics, UsdUtils/usdz).
+  UsdLux, UsdPhysics, UsdUtils/usdz); 25.8 holds 24.
 - **Aliases.** Friendly names map onto upstream validators so configs read naturally:
 
   | Alias | Upstream validator(s) / error names |
@@ -261,17 +273,22 @@ is opt-in and never imported by the core.
 - **Fixture corpus** under `tests/fixtures/`:
   - `pass/` — minimal valid assets in `.usda`, `.usdc` and `.usdz`, including a referenced
     sub-asset that resolves and an instanced set.
-  - `fail/<case>/` — one defect per directory: `missing_reference`, `missing_sublayer`,
-    `no_default_prim`, `no_up_axis`, `wrong_meters_per_unit`, `over_prim_budget`,
-    `low_instancing`, `bad_prim_names`, `oversize_file` (generated at test time, not
-    committed), `usdz_compressed`. Each has `expected.json` listing the rule IDs and codes
+  - `fail/<case>/` — one defect per directory. Present now: `missing_reference`,
+    `missing_sublayer`, `no_default_prim`, `no_up_axis` (also no `metersPerUnit`),
+    `missing_material_binding_api` (an upstream error with a fixer), `unparseable`,
+    `usdz_compressed` (cannot be opened) and `usdz_misaligned`; planned with the house
+    rules: `wrong_meters_per_unit`, `over_prim_budget`, `low_instancing`, `bad_prim_names`,
+    `oversize_file` (generated at test time, not committed). Each has `expected.json`
+    listing the rule IDs and codes
     that must be reported — no more, no fewer. The convention, as implemented in
     `tests/test_fixtures.py`: `expected.json` holds
     `{"description": "...", "findings": [{"rule": "...", "code": "..."}]}`; every USD file
     in the case directory is checked together and the reported `(rule, code)` pairs must
     equal that list as a multiset.
-  - `.usdc`/`.usdz` fixtures are generated from `.usda` sources by a script in
-    `tests/fixtures/build.py` so the binary files are reproducible.
+  - `.usdc`/`.usdz` fixtures are generated from `.usda` sources (or, for the broken
+    packages, written with `zipfile`) by `tests/fixtures/build.py`, which
+    `tests/conftest.py` runs before collection. The outputs are git-ignored, so the
+    repository holds only text sources and the binaries are reproducible from them.
 - **Unit tests** per rule with in-memory stages (`Usd.Stage.CreateInMemory`) for boundary
   values (budget at N and N+1, regex edge cases, tolerance on `metersPerUnit`).
 - **Golden output tests** for text, JSON, GitHub annotations and Markdown summary.

@@ -38,17 +38,15 @@ def capture_native_stderr(sink: list[str]) -> Iterator[None]:
             sink.extend(line for line in text.splitlines() if line.strip())
 
 
-_TF_ERROR_RE = re.compile(r"Error in '[^']*' at line \d+ in file [^:]+ : '(.*)'\s*$")
+_TF_ERROR_RE = re.compile(
+    r"Error in '[^']*' at line \d+ in file \S+ : '(.*?)'(?=\s*(?:Error in '|\Z))", re.S
+)
 
 
 def tf_error_messages(exc: BaseException) -> list[str]:
     """Pull the human-readable commentary out of a ``Tf.ErrorException``."""
-    messages = []
-    for line in str(exc).splitlines():
-        m = _TF_ERROR_RE.search(line.strip())
-        if m:
-            messages.append(m.group(1))
-    return messages or [str(exc).strip()]
+    messages = [" ".join(m.split()) for m in _TF_ERROR_RE.findall(str(exc))]
+    return messages or [" ".join(str(exc).split())]
 
 
 @dataclass

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import enum
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable
 
 
@@ -102,6 +102,8 @@ class Report:
     files: list[str]
     findings: list[Finding]
     fail_on: str = "error"
+    #: Native OpenUSD output captured per file (warnings it prints instead of raising).
+    diagnostics: dict[str, list[str]] = field(default_factory=dict)
 
     def counts(self) -> dict[str, int]:
         counts = {s.value: 0 for s in Severity}

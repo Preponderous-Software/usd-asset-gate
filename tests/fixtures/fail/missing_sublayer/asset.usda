@@ -1,0 +1,13 @@
+#usda 1.0
+(
+    defaultPrim = "Shot"
+    metersPerUnit = 1
+    subLayers = [
+        @./shot_layout.usda@
+    ]
+    upAxis = "Y"
+)
+
+def Xform "Shot"
+{
+}

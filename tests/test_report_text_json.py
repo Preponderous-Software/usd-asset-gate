@@ -64,13 +64,19 @@ def test_use_colour_respects_no_color(monkeypatch):
 
 
 def test_json_round_trip():
-    report = Report(files=["props/crate.usda", "b.usda"], findings=[FINDING], fail_on="warning")
+    report = Report(
+        files=["props/crate.usda", "b.usda"],
+        findings=[FINDING],
+        fail_on="warning",
+        diagnostics={"props/crate.usda": ["Warning: could not open asset"]},
+    )
     data = json.loads(json_report.render(report))
     assert data["files"] == [
-        {"path": "props/crate.usda", "findings": 1},
-        {"path": "b.usda", "findings": 0},
+        {"path": "props/crate.usda", "findings": 1, "diagnostics": ["Warning: could not open asset"]},
+        {"path": "b.usda", "findings": 0, "diagnostics": []},
     ]
     back = json_report.from_dict(data)
     assert back.files == report.files
     assert back.findings == report.findings
     assert back.fail_on == "warning"
+    assert back.diagnostics["props/crate.usda"] == ["Warning: could not open asset"]

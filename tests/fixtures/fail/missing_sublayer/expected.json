@@ -1,0 +1,7 @@
+{
+  "description": "A sublayer that does not exist.",
+  "findings": [
+    {"rule": "upstream:usdValidation:CompositionErrorTest", "code": "CompositionError"},
+    {"rule": "upstream:usdUtilsValidators:MissingReferenceValidator", "code": "UnresolvableDependency"}
+  ]
+}
