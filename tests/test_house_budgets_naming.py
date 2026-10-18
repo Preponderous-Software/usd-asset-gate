@@ -216,3 +216,19 @@ def test_invalid_budget_settings_name_the_key(rules, key):
     with pytest.raises(cfg.ConfigError) as exc:
         cfg.parse({"rules": rules})
     assert key in str(exc.value)
+
+
+def test_empty_path_glob_matches_nothing():
+    settings = {
+        "patterns": [
+            {"match": {"path": ""}, "regex": ".*"},
+            {"regex": "^[A-Z]"},
+        ]
+    }
+    stage = naming_stage(("/Root/lower", "Xform"))
+    assert [f.prim_path for f in prim_naming.check(ctx_for(stage), settings)] == ["/Root/lower"]
+
+
+def test_oversized_repetition_is_a_config_error():
+    with pytest.raises(cfg.ConfigError, match=r"rules\.prim-naming\.patterns\[0\]\.regex"):
+        cfg.parse({"rules": {"prim-naming": {"patterns": [{"regex": "a{99999999999999999999}"}]}}})

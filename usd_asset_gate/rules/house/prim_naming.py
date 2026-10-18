@@ -27,7 +27,8 @@ def compile_patterns(patterns: list[dict]) -> list[tuple[str | None, re.Pattern 
         compiled.append(
             (
                 match.get("type"),
-                glob_to_regex(path) if path else None,
+                # An explicit empty glob matches no path; only an omitted one matches all.
+                glob_to_regex(path) if path is not None else None,
                 re.compile(p["regex"]),
             )
         )
@@ -88,5 +89,5 @@ def validate_settings(settings: dict, where: str) -> None:
     for i, p in enumerate(settings.get("patterns") or []):
         try:
             re.compile(p["regex"])
-        except re.error as exc:
+        except (re.error, OverflowError) as exc:
             raise ValueError(f"{where}.patterns[{i}].regex: invalid regex: {exc}") from None
