@@ -103,17 +103,16 @@ def filter_paths(
     return kept
 
 
-def _git(args: list[str], cwd: str | None = None) -> str:
+def _git(args: list[str], cwd: str | None = None) -> bytes:
+    """Run git and return raw stdout bytes (no newline translation)."""
     import subprocess
 
     try:
-        proc = subprocess.run(
-            ["git", *args], cwd=cwd, capture_output=True, text=True, check=False
-        )
+        proc = subprocess.run(["git", *args], cwd=cwd, capture_output=True, check=False)
     except FileNotFoundError:
         raise DiscoveryError("git is not installed or not on PATH") from None
     if proc.returncode != 0:
-        detail = proc.stderr.strip() or f"exit code {proc.returncode}"
+        detail = os.fsdecode(proc.stderr).strip() or f"exit code {proc.returncode}"
         raise DiscoveryError(f"git {' '.join(args)} failed: {detail}")
     return proc.stdout
 
@@ -141,12 +140,15 @@ def changed_files(ref: str) -> list[str]:
             f"--changed-since: ref {ref!r} is not present in this clone; fetch it first, "
             f"for example: git fetch origin {ref}"
         )
-    top = _git(["rev-parse", "--show-toplevel"]).strip()
+    top = os.fsdecode(_git(["rev-parse", "--show-toplevel"]).rstrip(b"\n"))
     out = _git(
         ["diff", "--name-only", "-z", "--diff-filter=ACMR", f"{ref}...HEAD"], cwd=top
     )
     files = []
-    for name in out.split("\0"):
+    # Split the raw bytes on NUL and decode each name with the filesystem encoding,
+    # so carriage returns and undecodable bytes in file names survive intact.
+    for raw in out.split(b"\0"):
+        name = os.fsdecode(raw)
         if not name or not is_usd_file(name):
             continue
         full = os.path.join(top, name)
@@ -156,11 +158,14 @@ def changed_files(ref: str) -> list[str]:
 
 
 def under_any(path: str, roots: list[str]) -> bool:
-    """True when ``path`` is one of ``roots`` or inside one of them (display paths)."""
+    """True when ``path`` is one of ``roots`` or inside one of them.
+
+    Both sides are compared as normalised absolute paths, so ``.``, ``..`` and
+    absolute spellings work from any working directory.
+    """
+    target = os.path.normcase(os.path.abspath(path))
     for root in roots:
-        root = display_path(root).rstrip("/")
-        if root in ("", "."):
-            return True
-        if path == root or path.startswith(root + "/"):
+        base = os.path.normcase(os.path.abspath(root))
+        if target == base or target.startswith(base.rstrip(os.sep) + os.sep):
             return True
     return False

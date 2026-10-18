@@ -101,3 +101,24 @@ def test_outside_a_git_repository_is_a_usage_error(tmp_path, monkeypatch, cli):
     monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
     code, _, err = cli("check", "--changed-since", "main")
     assert code == 2
+
+
+def test_file_name_with_carriage_return_is_kept(repo):
+    name = "assets/a\rb.usda"
+    (repo / name).write_text(VALID)
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "cr")
+    assert name in discovery.changed_files("main")
+
+
+def test_narrowing_from_a_subdirectory(repo, monkeypatch, cli):
+    (repo / "other").mkdir()
+    (repo / "other" / "x.usda").write_text(VALID)
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "other")
+    monkeypatch.chdir(repo / "assets")
+    changed = discovery.changed_files("main")
+    assert sorted(c for c in changed if discovery.under_any(c, ["."])) == ["edit.usda", "new.usda"]
+    assert sorted(c for c in changed if discovery.under_any(c, [".."])) == sorted(changed)
+    outside = str(repo / "other" / "x.usda").replace("\\", "/")
+    assert [c for c in changed if discovery.under_any(c, ["../other"])] == [outside]

@@ -13,6 +13,8 @@ how many more are only in the job summary and the log.
 
 from __future__ import annotations
 
+import secrets
+
 from ..model import Finding, Report, Severity
 
 DEFAULT_MAX_PER_SEVERITY = 10
@@ -62,3 +64,18 @@ def render(report: Report, max_per_severity: int = DEFAULT_MAX_PER_SEVERITY) -> 
             )
         )
     return "\n".join(lines) + ("\n" if lines else "")
+
+
+def guarded(text: str, token: str | None = None) -> str:
+    """Wrap human-readable output so the runner does not execute commands inside it.
+
+    File names and messages come from the pull request. Between
+    ``::stop-commands::<token>`` and ``::<token>::`` GitHub ignores workflow
+    commands, so a file name containing a newline and ``::error::...`` (or
+    ``::stop-commands::``) cannot forge annotations. The token is random per run,
+    so the text cannot end the guard early.
+    """
+    token = token or secrets.token_hex(16)
+    if not text.endswith("\n"):
+        text += "\n"
+    return f"::stop-commands::{token}\n{text}::{token}::\n"

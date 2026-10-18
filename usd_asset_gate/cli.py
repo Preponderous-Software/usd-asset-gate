@@ -191,7 +191,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         if limit is None:
             limit = github_report.DEFAULT_MAX_PER_SEVERITY
         sys.stdout.write(github_report.render(report, max_per_severity=limit))
-        sys.stdout.write(text_report.render(report))
+        sys.stdout.write(github_report.guarded(text_report.render(report)))
     else:
         sys.stdout.write(text_report.render(report, colour=text_report.use_colour(sys.stdout)))
     return report.exit_code

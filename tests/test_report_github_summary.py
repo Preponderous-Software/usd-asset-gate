@@ -158,7 +158,13 @@ def test_json_file_written_alongside_github_format(tmp_path, cli):
     assert code == 1
     first = out.splitlines()[0]
     assert first.startswith("::error file=tests/fixtures/fail/missing_reference/asset.usda,line=8,")
-    assert out.splitlines()[-1].startswith("FAIL: 1 file checked")
+    lines = out.splitlines()
+    # The human-readable report sits inside a stop-commands guard with a random token.
+    guard = next(i for i, line in enumerate(lines) if line.startswith("::stop-commands::"))
+    token = lines[guard].split("::")[2]
+    assert len(token) == 32
+    assert lines[-1] == f"::{token}::"
+    assert lines[-2].startswith("FAIL: 1 file checked")
     data = json.loads(out_json.read_text())
     assert data["findings"][0]["line"] == 8
 
@@ -196,3 +202,70 @@ def test_usda_prim_line():
     assert usda_prim_line(USDA, "/World/Looks/wood.inputs:x") == 10
     assert usda_prim_line(USDA, "/Nope") is None
     assert usda_prim_line(USDA, "/") is None
+
+
+def test_guard_neutralises_forged_commands_in_file_names():
+    forged = Finding(
+        rule="r", code="C", severity=Severity.ERROR,
+        file="a\n::error::forged\n::stop-commands::x.usda", message="m",
+    )
+    from usd_asset_gate.report import text
+
+    out = github.guarded(text.render(Report(files=[forged.file], findings=[forged])), token="T0K")
+    lines = out.splitlines()
+    assert lines[0] == "::stop-commands::T0K"
+    assert lines[-1] == "::T0K::"
+    # Every forged command line is inside the guard.
+    inside = lines[1:-1]
+    assert "::error::forged" in inside and "::stop-commands::x.usda: error r: m [C]" in inside
+    # The annotation itself escapes the newline, so it stays one command.
+    assert "\n" not in github.annotation(forged)
+    assert github.guarded("x").endswith("\n") and github.guarded("x") != github.guarded("x")
+
+
+def test_summary_budget_covers_many_distinct_files():
+    many = [
+        Finding(rule="r", code="C", severity=Severity.ERROR, file=f"assets/{'deep/' * 20}f{i}.usda", message="m")
+        for i in range(2000)
+    ]
+    report = Report(files=[f.file for f in many], findings=many)
+    text = summary.render(report, max_bytes=20_000)
+    assert len(text.encode("utf-8")) <= 20_000
+    assert "more file(s) with findings not shown" in text
+    assert "more finding(s)" not in text or text.rstrip().endswith("</details>")
+    tiny = summary.render(report, max_bytes=300)
+    assert len(tiny.encode("utf-8")) <= 300
+
+
+NESTED = """#usda 1.0
+(
+    defaultPrim = "A"
+    customData = {
+        string note = "def Xform \"Child\" { }"
+    }
+)
+
+def Xform "A" (
+    customData = { int x = 1 }
+)
+{
+    def Xform "Group"
+    {
+        def Xform "Child"
+        {
+        }
+    }
+
+    def Xform "Child"
+    {
+    }
+}
+"""
+
+
+def test_usda_prim_line_respects_hierarchy():
+    assert usda_prim_line(NESTED, "/A") == 9
+    assert usda_prim_line(NESTED, "/A/Group/Child") == 15
+    assert usda_prim_line(NESTED, "/A/Child") == 20
+    assert usda_prim_line(NESTED, "/Child") is None
+    assert usda_prim_line(NESTED, "/A/Group/Missing") is None

@@ -52,21 +52,20 @@ def render(
     title: str = "## USD asset gate",
     overflow_hint: str = "the JSON report and the job log",
 ) -> str:
-    head = [title, "", headline(report), ""]
+    """Render the summary, never longer than ``max_bytes`` once UTF-8 encoded.
+
+    When it would not fit, finding rows are dropped first, then per-file rows,
+    each replaced by a line saying how many were left out.
+    """
     with_findings = [p for p in report.files if report.findings_for(p)]
-    if with_findings:
-        head += ["| File | Errors | Warnings | Info |", "|---|---:|---:|---:|"]
-        for path in with_findings:
-            per = {"error": 0, "warning": 0, "info": 0}
-            for f in report.findings_for(path):
-                per[f.severity.value] += 1
-            head.append(f"| {code(path)} | {per['error']} | {per['warning']} | {per['info']} |")
-        head.append("")
     clean = len(report.files) - len(with_findings)
-    if clean:
-        head += [f"{clean} file{'s' if clean != 1 else ''} with no findings.", ""]
-    if not report.findings:
-        return "\n".join(head) + "\n"
+
+    file_rows = []
+    for path in with_findings:
+        per = {"error": 0, "warning": 0, "info": 0}
+        for f in report.findings_for(path):
+            per[f.severity.value] += 1
+        file_rows.append(f"| {code(path)} | {per['error']} | {per['warning']} | {per['info']} |")
 
     rows = []
     for f in report.findings:
@@ -80,32 +79,64 @@ def render(
             f"| {_ICON[f.severity.value]} {f.severity.value} | {code(f.file)} | {where} | "
             f"{code(f.rule)} | {message} |"
         )
-    table_head = [
-        f"<details open><summary>Findings ({len(rows)})</summary>",
-        "",
-        "| Severity | File | Where | Rule | Message |",
-        "|---|---|---|---|---|",
-    ]
-    tail = ["", "</details>", ""]
 
-    def assemble(kept: int) -> str:
-        body = head + table_head + rows[:kept]
-        if kept < len(rows):
-            body.append("")
-            body.append(
-                f"_{len(rows) - kept} more finding(s) not shown to stay under the size "
-                f"limit; see {overflow_hint}._"
-            )
-        return "\n".join(body + tail)
+    def assemble(kept_files: int, kept_rows: int) -> str:
+        out = [title, "", headline(report), ""]
+        if file_rows:
+            out += ["| File | Errors | Warnings | Info |", "|---|---:|---:|---:|"]
+            out += file_rows[:kept_files]
+            if kept_files < len(file_rows):
+                out += [
+                    "",
+                    f"_{len(file_rows) - kept_files} more file(s) with findings not shown "
+                    f"to stay under the size limit; see {overflow_hint}._",
+                ]
+            out.append("")
+        if clean:
+            out += [f"{clean} file{'s' if clean != 1 else ''} with no findings.", ""]
+        if rows:
+            out += [
+                f"<details open><summary>Findings ({len(rows)})</summary>",
+                "",
+                "| Severity | File | Where | Rule | Message |",
+                "|---|---|---|---|---|",
+            ]
+            out += rows[:kept_rows]
+            if kept_rows < len(rows):
+                out += [
+                    "",
+                    f"_{len(rows) - kept_rows} more finding(s) not shown to stay under the "
+                    f"size limit; see {overflow_hint}._",
+                ]
+            out += ["", "</details>"]
+        return "\n".join(out) + "\n"
 
-    kept = len(rows)
-    text = assemble(kept)
-    while kept > 0 and len(text.encode("utf-8")) > max_bytes:
-        # Drop rows proportionally to the overshoot, at least one per pass.
-        over = len(text.encode("utf-8")) - max_bytes
-        avg = max(1, len("\n".join(rows[:kept]).encode("utf-8")) // max(kept, 1))
-        kept = max(0, kept - max(1, over // avg + 1))
-        text = assemble(kept)
+    def size(kept_files: int, kept_rows: int) -> int:
+        return len(assemble(kept_files, kept_rows).encode("utf-8"))
+
+    def largest_fitting(count: int, fits) -> int:
+        lo, hi = 0, count  # the largest k in [0, count] with fits(k), else 0
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if fits(mid):
+                lo = mid
+            else:
+                hi = mid - 1
+        return lo
+
+    kept_files, kept_rows = len(file_rows), len(rows)
+    if size(kept_files, kept_rows) > max_bytes:
+        kept_rows = largest_fitting(len(rows), lambda k: size(kept_files, k) <= max_bytes)
+    if size(kept_files, kept_rows) > max_bytes:
+        kept_rows = 0
+        kept_files = largest_fitting(len(file_rows), lambda k: size(k, 0) <= max_bytes)
+    text = assemble(kept_files, kept_rows)
+    if len(text.encode("utf-8")) > max_bytes:  # not even the skeleton fits
+        text = "\n".join(
+            [title, "", headline(report), "",
+             f"_Details omitted to stay under the size limit; see {overflow_hint}._", ""]
+        )
+        text = text.encode("utf-8")[:max_bytes].decode("utf-8", errors="ignore")
     return text
 
 
