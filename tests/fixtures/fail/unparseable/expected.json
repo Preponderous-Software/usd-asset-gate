@@ -1,0 +1,6 @@
+{
+  "description": "A .usda file with a syntax error cannot be opened as a stage.",
+  "findings": [
+    {"rule": "stage-open", "code": "StageOpenFailed"}
+  ]
+}
