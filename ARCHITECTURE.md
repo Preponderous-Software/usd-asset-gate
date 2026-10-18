@@ -230,8 +230,8 @@ Resolution rules, as implemented:
 - **Globs.** `include`, `exclude` and `overrides[].paths` match the whole forward-slash path
   relative to the working directory; `**` spans directories (`**/` also matches none),
   `*` and `?` stay within one path segment. `include`/`exclude` filter files found by
-  walking a directory (and, from M6, changed files); a file named explicitly on the command
-  line is always checked.
+  walking a directory and the files found by `--changed-since`; a file named explicitly on
+  the command line is always checked.
 - **Overrides.** Defaults, then `rules`, then every matching `overrides` entry in file
   order; each layer replaces settings key by key, one level deep (a whole `max_by_type`
   mapping is replaced, not merged).
@@ -463,5 +463,7 @@ Recorded on 2026-10-17 by the project owner; each one closes a former open quest
 3. **Variants.** `usdchecker` exposes `--variantSets` / `--variants` and caps variant
    validation at 1000 calls by default. Should the config expose the same controls, and
    what is a sane default for CI time?
-4. **Line numbers.** Mapping a prim path to a `.usda` line number needs a light text scan;
-   is "file-level annotation" good enough for `.usdc`/`.usdz` and for the MVP?
+4. **Line numbers.** The MVP fills `line` best-effort for `.usda` root layers with a light
+   text scan and annotates `.usdc`/`.usdz` files, and problems in non-root layers, at file
+   level (see [Output formats](#output-formats)). Is file-level annotation good enough for
+   those, or is a finer mapping worth its cost?
