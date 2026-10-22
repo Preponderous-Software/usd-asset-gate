@@ -122,3 +122,32 @@ def test_narrowing_from_a_subdirectory(repo, monkeypatch, cli):
     assert sorted(c for c in changed if discovery.under_any(c, [".."])) == sorted(changed)
     outside = str(repo / "other" / "x.usda").replace("\\", "/")
     assert [c for c in changed if discovery.under_any(c, ["../other"])] == [outside]
+
+
+def test_renamed_file_is_listed_under_its_new_name(repo):
+    git(repo, "mv", "assets/keep.usda", "assets/moved.usda")
+    git(repo, "commit", "-q", "-m", "rename")
+    changed = discovery.changed_files("main")
+    assert "assets/moved.usda" in changed
+    assert "assets/keep.usda" not in changed
+
+
+def test_uppercase_extension_is_listed(repo):
+    (repo / "assets" / "LOUD.USDA").write_text(VALID)
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "loud")
+    assert "assets/LOUD.USDA" in discovery.changed_files("main")
+
+
+def test_changed_file_missing_from_the_working_tree_is_skipped(repo):
+    (repo / "assets" / "new.usda").unlink()  # deleted locally, not committed
+    assert discovery.changed_files("main") == ["assets/edit.usda"]
+
+
+def test_changes_made_on_ref_after_the_branch_point_are_not_listed(repo):
+    git(repo, "checkout", "-q", "main")
+    (repo / "assets" / "main_only.usda").write_text(VALID)
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "main moves on")
+    git(repo, "checkout", "-q", "feature")
+    assert discovery.changed_files("main") == ["assets/edit.usda", "assets/new.usda"]
