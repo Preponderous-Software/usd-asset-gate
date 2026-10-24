@@ -32,7 +32,7 @@ shell layer, so the same core runs from a laptop, a pre-commit hook or any CI sy
 
 | Component | Module | Responsibility |
 |---|---|---|
-| CLI | `usd_asset_gate/cli.py` | `argparse` front end: `check`, `rules`, `comment`. Exit codes 0 / 1 / 2. |
+| CLI | `usd_asset_gate/cli.py` | `argparse` front end: `check`, `rules`, `comment`, `preview`. Exit codes 0 / 1 / 2 (`preview` never exits 1). |
 | Finding model | `model.py` | `Finding`, `Severity`, `Report`; stable ordering; exit code from `fail_on`. |
 | Runner | `runner.py` | Opens each file once, runs every enabled rule, collects and sorts findings. A file that cannot be opened at all is reported under the built-in rule `stage-open` (code `StageOpenFailed`). |
 | Config loader | `config.py` | Find and parse `.usd-asset-gate.yml`, validate against the schema, merge defaults and per-path overrides. |
@@ -43,6 +43,7 @@ shell layer, so the same core runs from a laptop, a pre-commit hook or any CI sy
 | Rule registry | `rules/registry.py` | Rule IDs, defaults, parameter schemas, the alias table to upstream validators (each alias *claims* specific upstream errors). |
 | Reporters | `report/{text,json,github,summary}.py` | Render findings for each output. |
 | PR commenter | `report/comment.py` | Create-or-update one PR comment with `urllib.request`. |
+| Preview (advisory) | `preview/{flatten,strata,compare,run}.py`, `report/previews.py` | Before/after images of changed assets rendered headless by Strata, compared with Strata's ΔE policy. Imported only by `preview` and `comment --previews`. See [Preview](#preview-strata-headless-advisory). |
 | Shell layer | `action.yml`, `ci/usd-asset-gate.sh` | Checkout, install, invoke the CLI; no logic beyond plumbing. |
 
 ## Data flow for one run
@@ -334,7 +335,8 @@ The token is passed through `http.extraheader` for the fetch only and is never w
 
 No other runtime dependencies: HTTP calls use `urllib.request`, schema validation is
 hand-written. The post-MVP `[nvidia]` extra (see [Optional NVIDIA rule source](#optional-nvidia-rule-source))
-is opt-in and never imported by the core.
+is opt-in and never imported by the core. Neither is the `[preview]` extra (numpy, plus a
+Strata `libstrata.so` and Mesa's EGL/llvmpipe on the machine), used only by `preview`.
 
 ## Testing strategy
 
@@ -414,6 +416,50 @@ for this optional step; the gate itself keeps running on `pip install usd-core`.
   they have to be uploaded as a workflow artifact or committed to a branch and linked. That
   choice is still open (see [Open questions](#open-questions)).
 
+### Preview (Strata headless, advisory)
+
+Accepted on 2026-10-23 (RFC 0028 in Preponderous-Software/rfcs; see
+[Decisions](#decisions) 5). A light tier that sits **beside** the thumbnail plan above; it
+does not replace it.
+
+`usd-asset-gate preview --changed-since <ref> --out DIR --json previews.json` renders each
+changed root layer twice from the same cameras: as composed at the merge base of `<ref>`
+and `HEAD` (a temporary detached `git worktree`, removed afterwards) and as composed now.
+A new file has only "after", a deleted one only "before". Files that merely reference a
+changed file are not rendered.
+
+- **USD → triangles in Python** (`preview/flatten.py`, `usd-core` only). Meshes are
+  fan-triangulated (control cage; `leftHanded` honoured); `Cube`, `Sphere`, `Cylinder`,
+  `Cone`, `Capsule` and `Plane` are tessellated here, because the `usd-core` wheel has no
+  `GeomUtil` or `UsdImaging`. `PointInstancer` prototypes are drawn at every instance;
+  instance proxies are traversed. Invisible prims and `guide` purpose are skipped (and
+  `proxy` when the stage has `render` geometry). Colour is `displayColor` (any
+  interpolation, inherited from ancestors), else a constant `UsdPreviewSurface`
+  `diffuseColor`, else grey. Vertices are split per face (flat shading); Z-up stages are
+  rotated to Y-up. Over `preview.max_triangles` the file gets a "too large" note.
+- **Rendering** (`preview/strata.py`): `ctypes` over Strata's versioned C ABI, with every
+  struct size checked against `strata_struct_size` at load. Headless (EGL surfaceless),
+  `STRATA_LIGHTING_LEGACY`, 40° vertical field of view, views `three_quarter` and
+  `three_quarter_back` by default (`top`, `front` optional), 640 × 360, framed on the union
+  of the before and after bounds. Strata writes linear colour; the readback is sRGB-encoded.
+- **Comparison** (`preview/compare.py`): Strata's golden-image policy ported to numpy —
+  CIE76 ΔE in L\*a\*b\*, a pixel differs above 4.0, "no visible change" up to 0.5 % of
+  pixels — and its red diff picture. Each view gets before, after, diff and a
+  before | after | diff strip.
+- **Report:** `previews.json`, a "Visual changes (advisory)" Markdown section (stdout and
+  `--summary`), and `comment --from report.json --previews previews.json` appends the same
+  section to the one PR comment. The section always lists what is not drawn.
+- **Exit code:** 0 whatever the images show and when Strata cannot start ("preview
+  unavailable"); 2 only on a usage or config error. Opt-in with `preview.enabled: true`
+  (config `version: 2`) or `--force`.
+- **Images:** written to `--out`. A workflow that allows `uses:` can upload them with
+  `actions/upload-artifact`; a plain `run:` step cannot upload an artifact, so in the
+  local-only mode they stay on the runner and the job summary carries the numbers. This
+  repository's own CI does the latter (`preview (Strata headless)` job).
+- **Getting Strata without `uses:`:** `curl` the release's `libstrata-<v>-linux-x64.so`,
+  check it against the pinned SHA-256, install `libegl1 libegl-mesa0 libgl1-mesa-dri`, and
+  set `STRATA_LIBRARY`, `LIBGL_ALWAYS_SOFTWARE=1`, `GALLIUM_DRIVER=llvmpipe`. Linux x64 only.
+
 ### Distribution (PyPI and GitHub Marketplace)
 
 Once the MVP works, the package is published to PyPI as `usd-asset-gate` (the name was
@@ -451,6 +497,20 @@ Recorded on 2026-10-17 by the project owner; each one closes a former open quest
 4. **NVIDIA `usd-validation-nvidia` is an optional extra, post-MVP.** Installed as
    `usd-asset-gate[nvidia]`; core runtime dependencies stay `usd-core` + `PyYAML` only.
    Details under [Optional NVIDIA rule source](#optional-nvidia-rule-source).
+
+Recorded on 2026-10-23 by the project owner, who accepted RFC 0028 (Preponderous-Software/rfcs)
+and left its open questions at the RFC's recommended defaults:
+
+5. **An advisory Strata preview sits beside the thumbnail container as a light tier.**
+   Decision 1 above stands as recorded: the full-OpenUSD `usdrecord` container remains the
+   planned path for faithful thumbnails. Beside it, `usd-asset-gate preview` renders
+   before/after images of changed assets headless with Strata (`ctypes` over its C ABI),
+   flattening USD to triangles in Python with `usd-core`, and diffs them with Strata's ΔE
+   policy. It is advisory: it never changes the exit code, which keeps the CONCEPT non-goal
+   "no render-quality judgement". Only changed root layers are rendered; the binding lives
+   in this package until Strata ships a Python binding of its own; images go to a workflow
+   artifact where the workflow can upload one. Details under
+   [Preview](#preview-strata-headless-advisory).
 
 ## Open questions
 

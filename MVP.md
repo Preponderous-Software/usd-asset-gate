@@ -157,5 +157,9 @@ criteria above are met. Owner decisions of 2026-10-17, detailed in
   GitHub Marketplace.
 - **Thumbnails** — optional thumbnail step running `usdrecord` in a Docker image with a full,
   version-pinned OpenUSD build, fetched or built with plain `docker` commands (no `uses:`).
+- **Preview (advisory)** — owner decision of 2026-10-23 (RFC 0028): `usd-asset-gate preview`
+  renders before/after images of changed assets headless with Strata and diffs them; never
+  fails the check. A light tier beside the thumbnail container, not a replacement. Detailed in
+  [ARCHITECTURE.md](ARCHITECTURE.md#preview-strata-headless-advisory).
 - **NVIDIA rule source** — `usd-validation-nvidia` as an optional extra
   (`pip install usd-asset-gate[nvidia]`); core runtime dependencies stay `usd-core` + `PyYAML`.

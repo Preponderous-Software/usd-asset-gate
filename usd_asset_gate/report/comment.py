@@ -80,8 +80,20 @@ class Context:
         )
 
 
-def render_body(report: Report, run_url: str | None = None) -> str:
-    """The comment text: the marker, then either an all-pass note or the summary."""
+def render_body(report: Report, run_url: str | None = None, previews: dict | None = None) -> str:
+    """The comment text: the marker, then either an all-pass note or the summary, then the
+    advisory "Visual changes" section when a ``preview --json`` document is given."""
+    body = _render_checks(report, run_url)
+    if previews is not None:
+        from . import previews as previews_md
+
+        section = previews_md.render(previews, run_url)
+        if len(body.encode("utf-8")) + len(section.encode("utf-8")) + 2 <= MAX_BODY_BYTES:
+            body += "\n" + section
+    return body
+
+
+def _render_checks(report: Report, run_url: str | None) -> str:
     if not report.findings:
         n = len(report.files)
         note = f"✅ **All checks pass** — {n} USD file{'s' if n != 1 else ''} checked"
@@ -176,7 +188,9 @@ class Client:
         return f"created comment {created.get('id') if isinstance(created, dict) else '?'}"
 
 
-def post(report: Report, ctx: Context, transport: Transport = urllib_transport) -> str:
+def post(
+    report: Report, ctx: Context, transport: Transport = urllib_transport, previews: dict | None = None
+) -> str:
     """Create or update the comment; returns a log line. Raises Skip or CommentError."""
     if not ctx.token:
         raise Skip("GITHUB_TOKEN is not set")
@@ -184,7 +198,8 @@ def post(report: Report, ctx: Context, transport: Transport = urllib_transport) 
         raise Skip("GITHUB_REPOSITORY is not set")
     if ctx.pr_number is None:
         raise Skip("no pull request number (not a pull_request event and no --pr)")
-    body = render_body(report, ctx.run_url)
+    body = render_body(report, ctx.run_url, previews)
     # A run that checked no USD files only edits an existing comment; it never
     # starts a new one, so pull requests without assets get no bot comment.
-    return Client(ctx, transport).upsert(body, create_if_missing=bool(report.files))
+    has_previews = bool(previews and previews.get("files"))
+    return Client(ctx, transport).upsert(body, create_if_missing=bool(report.files) or has_previews)

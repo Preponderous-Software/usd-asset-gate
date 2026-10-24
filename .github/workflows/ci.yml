@@ -56,3 +56,57 @@ jobs:
 
       - name: Run tests
         run: .venv/bin/python -m pytest -ra
+
+  # RFC 0028: the advisory Strata preview, rendered for real on Mesa llvmpipe. Strata comes
+  # from its GitHub release as one file, pinned by SHA-256 (no `uses:`, no container).
+  # A workflow artifact cannot be uploaded from a plain `run:` step (the artifact service
+  # token is only given to actions), so the images stay on the runner and the job summary
+  # carries the "Visual changes" section and the numbers.
+  preview:
+    name: preview (Strata headless)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      STRATA_VERSION: "0.4.0"
+      STRATA_SO_SHA256: "6044127f21c33abbd03d4e39182b5a6082c73e92479236bbd0aea6e68594b181"
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      GALLIUM_DRIVER: llvmpipe
+    steps:
+      - name: Checkout (plain git)
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          git init -q .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)" \
+            fetch -q --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git checkout -q --detach "${GITHUB_SHA}"
+
+      - name: Set up Python 3.12
+        run: |
+          python3 -m venv "$RUNNER_TEMP/uv"
+          "$RUNNER_TEMP/uv/bin/pip" install -q "uv==0.11.16"
+          "$RUNNER_TEMP/uv/bin/uv" venv -q --seed --python 3.12 .venv
+
+      - name: Install (pip install .[test,preview])
+        run: .venv/bin/python -m pip install -q "usd-core==26.8" ".[test,preview]"
+
+      - name: Install Strata and Mesa (EGL + llvmpipe)
+        run: |
+          mkdir -p "$RUNNER_TEMP/strata"
+          so="$RUNNER_TEMP/strata/libstrata.so"
+          curl -fsSL -o "$so" \
+            "https://github.com/Preponderous-Software/strata/releases/download/v${STRATA_VERSION}/libstrata-${STRATA_VERSION}-linux-x64.so"
+          echo "${STRATA_SO_SHA256}  $so" | sha256sum -c -
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends libegl1 libegl-mesa0 libgl1-mesa-dri
+          echo "STRATA_LIBRARY=$so" >> "$GITHUB_ENV"
+
+      - name: Render tests (Strata required)
+        run: .venv/bin/python -m pytest -ra -v tests/test_preview_render.py tests/test_preview.py
+
+      - name: Preview a real fixture change (into the job summary)
+        run: .venv/bin/python docs/capture_preview.py "$RUNNER_TEMP/previews"
+
+      - name: Show the previews document
+        run: cat "$RUNNER_TEMP/previews/previews.json"

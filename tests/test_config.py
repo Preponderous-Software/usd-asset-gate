@@ -34,7 +34,7 @@ def write(tmp_path: pathlib.Path, text: str) -> str:
         ("include: 'assets/**'\n", "include: expected array, got string"),
         ("fail_on: sometimes\n", "fail_on"),
         ("colour: red\n", "colour: unknown key"),
-        ("version: 2\n", "version"),
+        ("version: 3\n", "version"),
         ("fail_on: 2026-10-18\n", "fail_on: '2026-10-18' is not one of"),
         ("upstream:\n  keywords: UsdGeomValidators\n", "upstream.keywords: expected array"),
         ("overrides:\n  - rules: {}\n", "overrides[0].paths: required key is missing"),
