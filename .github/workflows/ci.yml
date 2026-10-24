@@ -68,8 +68,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      STRATA_VERSION: "0.5.0"
-      STRATA_TGZ_SHA256: "1e9db847327316c0493e70739149b41b49ae7cd24317d03ec5ce596345943f0e"
+      STRATA_VERSION: "0.6.0"
+      STRATA_TGZ_SHA256: "4fea4eaaefcc35e122b66a70cf5559c1dfa3ba57eff966f9dd5da2f49cba9499"
       LIBGL_ALWAYS_SOFTWARE: "1"
       GALLIUM_DRIVER: llvmpipe
     steps:

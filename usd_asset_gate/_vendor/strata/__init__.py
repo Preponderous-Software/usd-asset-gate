@@ -60,7 +60,7 @@ from ._abi import (
 )
 from ._loader import KNOWN_RELEASES, StrataLoadError, fetch_release, open_library, resolve_library_path
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = _abi.__all__ + [
     "Engine",
@@ -271,6 +271,20 @@ class Engine:
     def poll_event(self) -> Optional[Event]:
         event = Event()
         return event if self._raw.strata_poll_event(self.handle, ctypes.byref(event)) else None
+
+    def push_event(self, event: Event) -> None:
+        """ABI 1.12. Queues a copy of an event for poll_event, on any surface."""
+        self._call("strata_push_event", ctypes.byref(event))
+
+    def frame_seconds(self) -> float:
+        """ABI 1.12. Seconds to advance this frame: measured, or a stepped driver's step (docs/DRIVE.md)."""
+        seconds = ctypes.c_double()
+        self._call("strata_frame_seconds", ctypes.byref(seconds))
+        return seconds.value
+
+    def driven(self) -> bool:
+        """ABI 1.12. True if a harness drove this engine (STRATA_DRIVE)."""
+        return bool(self.lib.require("strata_is_driven")(self.handle))
 
     def frame_stats(self) -> FrameStats:
         stats = FrameStats()

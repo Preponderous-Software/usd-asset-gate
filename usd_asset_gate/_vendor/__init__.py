@@ -8,11 +8,11 @@ from the new tag, then update ``STRATA_BINDING`` (a test re-hashes the copies).
 """
 
 STRATA_BINDING = {
-    "tag": "v0.5.0",
-    "commit": "2f997acad88d22b1249ee67ed905ba50e6a661e8",
+    "tag": "v0.6.0",
+    "commit": "c2d7ee4c1102726c654c90d8361383d9ba3590b3",
     "sha256": {
-        "__init__.py": "acc4b4eaaf5ad17d59465d4a72c83e92c623639c1380015f8c41bf7f649bbd36",
-        "_abi.py": "bb06a27c3bfa9315700df6ea4cf4aa3a197ad602e9026f4dde179f52462872c5",
-        "_loader.py": "38225c8a2ac2a89ce7f6691c4ce0a153a95a53cb18e6a443c1577625393becc9",
+        "__init__.py": "86381523746aa9bf5c4a71ca734fd316972d67d1037482ed4af3bdfb8c4863cb",
+        "_abi.py": "372f03171126262068962e3fa83d70a91a8353603473f59e8df0fe13a671a094",
+        "_loader.py": "8b2e47f33ae815f6a73d6a1a944d70b17feceeaa9b544d4711646e0b302283db",
     },
 }
