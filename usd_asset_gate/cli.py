@@ -1,6 +1,7 @@
-"""Command-line front end: ``check`` and ``rules``.
+"""Command-line front end: ``check``, ``rules``, ``comment`` and ``preview``.
 
 Exit codes: 0 pass, 1 findings at or above ``fail_on``, 2 usage or config error.
+``preview`` is advisory and never exits 1.
 """
 
 from __future__ import annotations
@@ -117,6 +118,44 @@ def build_parser() -> argparse.ArgumentParser:
         "--from", dest="report", required=True, metavar="FILE", help="report from check --json"
     )
     comment.add_argument("--pr", type=int, metavar="N", help="pull request number (overrides the event)")
+    comment.add_argument(
+        "--previews",
+        metavar="FILE",
+        help="also add the advisory 'Visual changes' section from preview --json",
+    )
+
+    preview = sub.add_parser(
+        "preview",
+        help="render changed USD files before and after with Strata and diff them (advisory)",
+        description="Renders each changed root layer as it was at the merge base of REF and "
+        "as it is now, from the same cameras, headless with Strata (libstrata.so at "
+        "STRATA_LIBRARY), and compares the images with Strata's ΔE policy. Advisory: exits 0 "
+        "whatever the images show, and when Strata cannot start (reported as 'preview "
+        "unavailable'); 2 only on a usage or config error. Needs the preview extra: "
+        "pip install 'usd-asset-gate[preview]'.",
+    )
+    preview.add_argument(
+        "paths",
+        nargs="*",
+        metavar="PATH",
+        help="with --changed-since: limit to these; without it: render these files (after only)",
+    )
+    preview.add_argument("--config", metavar="FILE", help=config_help)
+    preview.add_argument(
+        "--changed-since",
+        metavar="REF",
+        help="render USD files changed between REF and HEAD, before and after",
+    )
+    preview.add_argument("--out", required=True, metavar="DIR", help="directory for the PNG images")
+    preview.add_argument("--json", metavar="FILE", dest="json_file", help="write the previews document to FILE")
+    preview.add_argument(
+        "--summary", metavar="FILE", help="append the Markdown section to FILE (e.g. $GITHUB_STEP_SUMMARY)"
+    )
+    preview.add_argument(
+        "--force",
+        action="store_true",
+        help="run even when the config does not set preview.enabled: true",
+    )
 
     rules = sub.add_parser("rules", help="list every available rule and its effective setting")
     rules.add_argument("--config", metavar="FILE", help=config_help)
@@ -306,9 +345,17 @@ def cmd_comment(args: argparse.Namespace) -> int:
             report = json_report.from_dict(json.load(fh))
     except (OSError, ValueError, KeyError) as exc:
         raise UsageError(f"cannot read report {args.report}: {exc}") from None
+    previews = None
+    if args.previews:
+        from .report import previews as previews_md
+
+        try:
+            previews = previews_md.load(args.previews)
+        except (OSError, ValueError) as exc:
+            raise UsageError(f"cannot read previews {args.previews}: {exc}") from None
     ctx = comment.Context.from_env(pr=args.pr)
     try:
-        result = comment.post(report, ctx)
+        result = comment.post(report, ctx, previews=previews)
     except comment.Skip as exc:
         sys.stdout.write(f"usd-asset-gate comment: skipped: {exc}\n")
         return EXIT_PASS
@@ -318,10 +365,87 @@ def cmd_comment(args: argparse.Namespace) -> int:
     return EXIT_PASS
 
 
+def preview_changes(args: argparse.Namespace, config):
+    """The repository top and (display path, Change) for every changed USD file to preview."""
+    from .discovery import _git, display_path, filter_paths, under_any
+    from .preview.run import changes_since
+
+    try:
+        _git(["rev-parse", "--verify", "--quiet", f"{args.changed_since}^{{commit}}"])
+        top = os.fsdecode(_git(["rev-parse", "--show-toplevel"]).rstrip(b"\n"))
+        changes = changes_since(args.changed_since, top)
+    except DiscoveryError as exc:
+        raise UsageError(f"--changed-since {args.changed_since}: {exc}") from None
+    for p in args.paths:
+        if not os.path.exists(p):
+            raise UsageError(f"no such file or directory: {p}")
+    rows = []
+    for c in changes:
+        full = os.path.join(top, c.path)
+        shown = display_path(full)
+        if args.paths and not under_any(full, args.paths):
+            continue
+        if filter_paths([shown], config.include, config.exclude):
+            rows.append((shown, c))
+    return top, rows
+
+
+def cmd_preview(args: argparse.Namespace) -> int:
+    require_pxr()
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        raise UsageError("preview needs numpy: pip install 'usd-asset-gate[preview]'") from None
+    from .preview import run as preview_run
+    from .preview.strata import Renderer
+    from .report import previews as previews_md
+
+    config = load_config(args.config)
+    if not config.preview.get("enabled", False) and not args.force:
+        sys.stdout.write("usd-asset-gate preview: skipped (preview.enabled is not true; pass --force)\n")
+        return EXIT_PASS
+    settings = preview_run.Settings.from_config(config.preview)
+    if not args.changed_since:
+        if not args.paths:
+            raise UsageError("no paths given (pass files or directories, or --changed-since REF)")
+        files = [(p, "added", None, p) for p in discover(args.paths, config)]
+        doc = preview_run.run(files, args.out, settings, Renderer)
+    else:
+        top, rows = preview_changes(args, config)
+        if not any(c.kind != "added" for _, c in rows):  # nothing needs the base
+            files = [(shown, c.kind, None, os.path.join(top, c.path)) for shown, c in rows]
+            doc = preview_run.run(files, args.out, settings, Renderer)
+        else:
+            try:
+                with preview_run.BaseWorktree(args.changed_since, top) as base:
+                    files = [
+                        (
+                            shown,
+                            c.kind,
+                            None if c.kind == "added" else os.path.join(base, c.path),
+                            None if c.kind == "deleted" else os.path.join(top, c.path),
+                        )
+                        for shown, c in rows
+                    ]
+                    doc = preview_run.run(files, args.out, settings, Renderer)
+            except DiscoveryError as exc:
+                raise UsageError(f"--changed-since {args.changed_since}: {exc}") from None
+    if args.json_file:
+        preview_run.write_json(doc, args.json_file)
+    section = previews_md.render(doc)
+    if args.summary:
+        with open(args.summary, "a", encoding="utf-8") as fh:
+            fh.write(section + "\n")
+    sys.stdout.write(section)
+    return EXIT_PASS
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    handler = {"check": cmd_check, "rules": cmd_rules, "comment": cmd_comment}[args.command]
+    handler = {"check": cmd_check, "rules": cmd_rules, "comment": cmd_comment, "preview": cmd_preview}[
+        args.command
+    ]
     try:
         return handler(args)
     except UsageError as exc:

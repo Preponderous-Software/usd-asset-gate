@@ -60,6 +60,48 @@ def _rules_schema() -> dict:
     }
 
 
+PREVIEW_VIEWS = ("three_quarter", "three_quarter_back", "top", "front")
+
+
+def _preview_schema() -> dict:
+    return {
+        "type": "object",
+        "description": "Advisory before/after visual diffs rendered headless by Strata "
+        "(`usd-asset-gate preview`; needs `version: 2`). Never changes the exit code.",
+        "additionalProperties": False,
+        "properties": {
+            "enabled": {"type": "boolean", "description": "Opt in (default false)."},
+            "views": {
+                "type": "array",
+                "items": {"enum": list(PREVIEW_VIEWS)},
+                "description": "Camera views, 1 to 4 (default: three_quarter, three_quarter_back).",
+            },
+            "size": {
+                "type": "array",
+                "items": {"type": "integer", "minimum": 16, "maximum": 4096},
+                "description": "Image width and height in pixels (default [640, 360]).",
+            },
+            "max_triangles": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Larger assets get a 'too large to preview' note (default 2000000).",
+            },
+            "threshold": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "ΔE (CIE76) a pixel must exceed to count as changed (default 4.0).",
+            },
+            "max_fraction": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Largest share of changed pixels still reported as 'no visible "
+                "change' (default 0.005).",
+            },
+        },
+    }
+
+
 def build_schema() -> dict:
     rules = _rules_schema()
     return {
@@ -69,7 +111,11 @@ def build_schema() -> dict:
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "version": {"type": "integer", "enum": [1]},
+            "version": {
+                "type": "integer",
+                "enum": [1, 2],
+                "description": "Config format version. 2 adds the `preview` key.",
+            },
             "include": {
                 **_STRINGS,
                 "description": "Path globs to check (default: every USD file).",
@@ -93,6 +139,7 @@ def build_schema() -> dict:
                 },
             },
             "rules": rules,
+            "preview": _preview_schema(),
             "overrides": {
                 "type": "array",
                 "items": {
@@ -240,6 +287,7 @@ class Config:
     rules: dict[str, dict] = field(default_factory=dict)
     overrides: list[tuple[list[str], dict[str, dict]]] = field(default_factory=list)
     source: str | None = None  # file the config was read from, if any
+    preview: dict = field(default_factory=dict)  # the validated `preview` mapping (version 2)
 
     def rule_settings(self, path: str | None = None) -> dict[str, dict]:
         """Effective settings for every configurable rule, for one file.
@@ -264,6 +312,18 @@ def parse(data: Any, source: str | None = None) -> Config:
     if data is None:
         data = {}
     validate(data, build_schema())
+    if "preview" in data:
+        if data.get("version") != 2:
+            raise ConfigError("preview: needs `version: 2` (the preview key was added in config version 2)")
+        preview = data["preview"]
+        views = preview.get("views")
+        if views is not None and not 1 <= len(views) <= 4:
+            raise ConfigError("preview.views: give 1 to 4 views")
+        if views is not None and len(set(views)) != len(views):
+            raise ConfigError("preview.views: a view is listed twice")
+        size = preview.get("size")
+        if size is not None and len(size) != 2:
+            raise ConfigError("preview.size: give [width, height]")
     rule_maps = [("rules", data.get("rules", {}))] + [
         (f"overrides[{i}].rules", o.get("rules", {}))
         for i, o in enumerate(data.get("overrides", []))
@@ -293,6 +353,7 @@ def parse(data: Any, source: str | None = None) -> Config:
             for o in data.get("overrides", [])
         ],
         source=source,
+        preview=copy.deepcopy(data.get("preview", {})),
     )
 
 

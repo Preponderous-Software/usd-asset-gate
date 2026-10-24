@@ -8,8 +8,10 @@
     "version": {
       "type": "integer",
       "enum": [
-        1
-      ]
+        1,
+        2
+      ],
+      "description": "Config format version. 2 adds the `preview` key."
     },
     "include": {
       "type": "array",
@@ -348,6 +350,54 @@
         }
       },
       "additionalProperties": false
+    },
+    "preview": {
+      "type": "object",
+      "description": "Advisory before/after visual diffs rendered headless by Strata (`usd-asset-gate preview`; needs `version: 2`). Never changes the exit code.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Opt in (default false)."
+        },
+        "views": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "three_quarter",
+              "three_quarter_back",
+              "top",
+              "front"
+            ]
+          },
+          "description": "Camera views, 1 to 4 (default: three_quarter, three_quarter_back)."
+        },
+        "size": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 16,
+            "maximum": 4096
+          },
+          "description": "Image width and height in pixels (default [640, 360])."
+        },
+        "max_triangles": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Larger assets get a 'too large to preview' note (default 2000000)."
+        },
+        "threshold": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "\u0394E (CIE76) a pixel must exceed to count as changed (default 4.0)."
+        },
+        "max_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Largest share of changed pixels still reported as 'no visible change' (default 0.005)."
+        }
+      }
     },
     "overrides": {
       "type": "array",
