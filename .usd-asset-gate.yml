@@ -1,7 +1,9 @@
 # usd-asset-gate's own configuration: this repository dogfoods the gate on its
 # expected-pass fixtures. The expected-fail fixtures are covered by pytest and by the
-# dogfood workflow, which checks them with their own configs.
-version: 1
+# dogfood workflow, which checks them with their own configs. Version 2 turns on the
+# advisory Strata preview, so a pull request that changes a fixture gets before/after
+# images and a "Visual changes" section in the dogfood comment (it never fails the check).
+version: 2
 
 include: ["tests/fixtures/pass/**"]
 fail_on: warning
@@ -24,3 +26,6 @@ rules:
         regex: "^M_[A-Za-z0-9_]+$"
       - match: { type: "*" }
         regex: "^[A-Z][A-Za-z0-9_]*$"
+
+preview:
+  enabled: true

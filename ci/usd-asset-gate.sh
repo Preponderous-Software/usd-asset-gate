@@ -24,6 +24,21 @@
 #                             commit (default: the upstream repository at main — pin it)
 #   GITHUB_TOKEN              used to fetch BASE_SHA if missing, and for the comment
 #   PYTHON                    interpreter used to create the virtualenv (default python3)
+#
+# Advisory visual diffs (RFC 0028; never change the exit code):
+#   USD_ASSET_GATE_PREVIEW    "auto" (default): with BASE_SHA set and `preview.enabled: true`
+#                             in the config, render the changed files before and after with
+#                             Strata, add "Visual changes" to the job summary and the PR
+#                             comment, and keep the PNGs in $RUNNER_TEMP/usd-asset-gate-previews.
+#                             "false" turns it off.
+#   STRATA_LIBRARY            a libstrata.so to use; otherwise the release below is
+#                             downloaded and checked against its pinned SHA-256
+#   STRATA_VERSION            Strata release to download (default 0.5.0)
+#   STRATA_SHA256             SHA-256 of libstrata-$STRATA_VERSION-linux-x64.so from that
+#                             release's SHA256SUMS (default: the 0.5.0 value)
+# The preview needs EGL and a Mesa driver on the runner (for example
+# `sudo apt-get install -y libegl1 libegl-mesa0 libgl1-mesa-dri`); without them it reports
+# "preview unavailable" and the check is unaffected.
 set -uo pipefail
 
 USD_CORE_VERSION="${USD_CORE_VERSION:-26.8}"
@@ -34,6 +49,11 @@ WORK="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 VENV="$WORK/usd-asset-gate-venv"
 REPORT="$WORK/usd-asset-gate-report.json"
 SUMMARY="${GITHUB_STEP_SUMMARY:-}"
+PREVIEW="${USD_ASSET_GATE_PREVIEW:-auto}"
+PREVIEWS="$WORK/usd-asset-gate-previews.json"
+PREVIEW_DIR="$WORK/usd-asset-gate-previews"
+STRATA_VERSION="${STRATA_VERSION:-0.5.0}"
+STRATA_SHA256="${STRATA_SHA256:-44f8263426b546c04295b1033032fded97541060c8e804873894d43e80fcffcb}"
 
 log() { printf 'usd-asset-gate.sh: %s\n' "$*"; }
 
@@ -87,9 +107,55 @@ fi
 "$VENV/bin/usd-asset-gate" "${args[@]}"
 status=$?
 
-# 4. Comment (never changes the exit code; it skips itself on fork PRs).
+# 4. Preview (advisory: every failure here is a warning, never the exit code).
+rm -f "$PREVIEWS"
+preview_enabled() {
+  "$VENV/bin/python" - "${USD_ASSET_GATE_CONFIG:-}" <<'PY' 2>/dev/null
+import sys
+from usd_asset_gate.config import load
+config = load(sys.argv[1] or None)
+sys.exit(0 if config.preview.get("enabled", False) else 1)
+PY
+}
+fetch_strata() {
+  if [ -n "${STRATA_LIBRARY:-}" ]; then
+    return 0
+  fi
+  local so="$WORK/libstrata-$STRATA_VERSION-linux-x64.so"
+  if [ ! -f "$so" ]; then
+    curl -fsSL -o "$so.part" \
+      "https://github.com/Preponderous-Software/strata/releases/download/v$STRATA_VERSION/libstrata-$STRATA_VERSION-linux-x64.so" \
+      || { rm -f "$so.part"; return 1; }
+    mv "$so.part" "$so"
+  fi
+  if ! echo "$STRATA_SHA256  $so" | sha256sum -c - >/dev/null 2>&1; then
+    rm -f "$so"
+    log "libstrata-$STRATA_VERSION-linux-x64.so does not match the pinned SHA-256; deleted"
+    return 1
+  fi
+  export STRATA_LIBRARY="$so"
+}
+if [ "$PREVIEW" != "false" ] && [ -n "${BASE_SHA:-}" ] && [ "$status" -ne 2 ] && preview_enabled; then
+  log "preview: rendering changed files with Strata (advisory)"
+  if ! "$VENV/bin/python" -c "import numpy" 2>/dev/null; then
+    "$VENV/bin/python" -m pip install -q --disable-pip-version-check "numpy>=1.24" \
+      || log "preview: could not install numpy"
+  fi
+  fetch_strata || log "preview: could not get Strata $STRATA_VERSION"
+  pargs=(preview --changed-since "$BASE_SHA" --out "$PREVIEW_DIR" --json "$PREVIEWS")
+  [ -n "$SUMMARY" ] && pargs+=(--summary "$SUMMARY")
+  [ -n "${USD_ASSET_GATE_CONFIG:-}" ] && pargs+=(--config "$USD_ASSET_GATE_CONFIG")
+  [ "${#paths[@]}" -gt 0 ] && pargs+=("${paths[@]}")
+  LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}" GALLIUM_DRIVER="${GALLIUM_DRIVER:-llvmpipe}" \
+    "$VENV/bin/usd-asset-gate" "${pargs[@]}" \
+    || echo "::warning title=usd-asset-gate::the advisory preview did not run; see the log"
+fi
+
+# 5. Comment (never changes the exit code; it skips itself on fork PRs).
 if [ "$COMMENT" = "true" ] && [ -f "$REPORT" ] && [ "$status" -ne 2 ]; then
-  if ! "$VENV/bin/usd-asset-gate" comment --from "$REPORT"; then
+  cargs=(comment --from "$REPORT")
+  [ -f "$PREVIEWS" ] && cargs+=(--previews "$PREVIEWS")
+  if ! "$VENV/bin/usd-asset-gate" "${cargs[@]}"; then
     echo "::warning title=usd-asset-gate::the PR comment could not be posted; see the log"
   fi
 fi

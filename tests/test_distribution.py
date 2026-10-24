@@ -35,6 +35,8 @@ def test_action_is_composite_with_documented_inputs():
     action = yaml.safe_load((REPO_ROOT / "action.yml").read_text())
     assert action["runs"]["using"] == "composite"
     assert {"config", "usd-core-version", "paths", "comment", "fail-on"} <= set(action["inputs"])
+    assert {"preview", "strata-version", "strata-sha256"} <= set(action["inputs"])
+    assert action["inputs"]["preview"]["default"] == "auto"
     for step in action["runs"]["steps"]:
         assert "uses" not in step
         assert step["shell"] == "bash"
@@ -70,3 +72,40 @@ def test_repository_config_is_valid():
 
     config = cfg.load(str(REPO_ROOT / ".usd-asset-gate.yml"))
     assert config.include == ["tests/fixtures/pass/**"]
+
+
+def _script_default(name):
+    text = (REPO_ROOT / "ci" / "usd-asset-gate.sh").read_text()
+    match = re.search(rf'^{name}="\$\{{{name}:-([^}}]*)\}}"$', text, re.M)
+    assert match, name
+    return match.group(1)
+
+
+def test_script_and_action_pin_the_same_strata_release():
+    action = yaml.safe_load((REPO_ROOT / "action.yml").read_text())
+    assert _script_default("STRATA_VERSION") == action["inputs"]["strata-version"]["default"]
+    assert _script_default("STRATA_SHA256") == action["inputs"]["strata-sha256"]["default"]
+    assert re.fullmatch(r"[0-9a-f]{64}", _script_default("STRATA_SHA256"))
+
+
+def test_script_preview_is_advisory():
+    text = (REPO_ROOT / "ci" / "usd-asset-gate.sh").read_text()
+    # the preview's own status is never assigned to the exit code, and the comment carries it
+    assert re.search(r'"\$\{pargs\[@\]\}" \\\n\s*\|\| echo "::warning', text)
+    assert 'cargs+=(--previews "$PREVIEWS")' in text
+    assert text.rstrip().endswith('exit "$status"')
+
+
+def test_vendored_strata_binding_is_the_pinned_release_unmodified():
+    import hashlib
+
+    from usd_asset_gate._vendor import STRATA_BINDING
+
+    vendored = REPO_ROOT / "usd_asset_gate" / "_vendor" / "strata"
+    assert sorted(p.name for p in vendored.glob("*.py")) == sorted(STRATA_BINDING["sha256"])
+    for name, digest in STRATA_BINDING["sha256"].items():
+        assert hashlib.sha256((vendored / name).read_bytes()).hexdigest() == digest, name
+    assert (vendored / "LICENSE").is_file()
+    import usd_asset_gate._vendor.strata as strata
+
+    assert strata.__version__ == STRATA_BINDING["tag"].lstrip("v")

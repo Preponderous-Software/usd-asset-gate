@@ -35,6 +35,11 @@ jobs:
             fetch -q --no-tags origin "${{ github.event.pull_request.base.sha }}" "${GITHUB_SHA}"
           git checkout -q --detach "${GITHUB_SHA}"
 
+      # Optional: EGL + Mesa llvmpipe for the advisory Strata preview (config
+      # `preview.enabled: true`, version 2). Without it the preview says "unavailable".
+      - name: Install Mesa for the advisory preview
+        run: sudo apt-get install -y -q --no-install-recommends libegl1 libegl-mesa0 libgl1-mesa-dri
+
       - name: USD asset gate
         env:
           GITHUB_TOKEN: ${{ github.token }}

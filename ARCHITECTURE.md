@@ -437,12 +437,19 @@ changed file are not rendered.
   interpolation, inherited from ancestors), else a constant `UsdPreviewSurface`
   `diffuseColor`, else grey. Vertices are split per face (flat shading); Z-up stages are
   rotated to Y-up. Over `preview.max_triangles` the file gets a "too large" note.
-- **Rendering** (`preview/strata.py`): `ctypes` over Strata's versioned C ABI, with every
-  struct size checked against `strata_struct_size` at load. Headless (EGL surfaceless),
+- **Rendering** (`preview/strata.py`): Strata's official Python binding (`ctypes` over the
+  versioned C ABI), vendored unmodified in `usd_asset_gate/_vendor/strata` from the Strata
+  `v0.5.0` tag (MIT; hashes recorded in `usd_asset_gate/_vendor/__init__.py` and re-checked by
+  a test). The binding has no PyPI release and a direct URL dependency would keep this package
+  off PyPI, so it is vendored rather than declared. It checks the ABI major and every struct
+  layout at load; the preview needs ABI 1.4+. Headless (EGL surfaceless),
   `STRATA_LIGHTING_LEGACY`, 40° vertical field of view, views `three_quarter` and
   `three_quarter_back` by default (`top`, `front` optional), 640 × 360, framed on the union
   of the before and after bounds. Strata writes linear colour; the readback is sRGB-encoded.
-- **Comparison** (`preview/compare.py`): Strata's golden-image policy ported to numpy —
+- **Comparison** (`preview/compare.py`): Strata's golden-image policy ported to numpy (kept
+  rather than calling `strata-imgcmp --json`, which would need the release tarball's binary
+  on every runner beside the library; CI checks the port against `strata-imgcmp --json` and
+  the numbers agree exactly) —
   CIE76 ΔE in L\*a\*b\*, a pixel differs above 4.0, "no visible change" up to 0.5 % of
   pixels — and its red diff picture. Each view gets before, after, diff and a
   before | after | diff strip.
@@ -459,6 +466,18 @@ changed file are not rendered.
 - **Getting Strata without `uses:`:** `curl` the release's `libstrata-<v>-linux-x64.so`,
   check it against the pinned SHA-256, install `libegl1 libegl-mesa0 libgl1-mesa-dri`, and
   set `STRATA_LIBRARY`, `LIBGL_ALWAYS_SOFTWARE=1`, `GALLIUM_DRIVER=llvmpipe`. Linux x64 only.
+- **In the shell layer:** `ci/usd-asset-gate.sh` (and so the composite action) does exactly
+  that after the check, on a pull request (`BASE_SHA` set) whose config enables the preview:
+  it installs numpy into its virtualenv, downloads and verifies the pinned library (default
+  Strata 0.5.0; `STRATA_VERSION`/`STRATA_SHA256`, action inputs `strata-version`/
+  `strata-sha256`; an existing `STRATA_LIBRARY` is used as is), runs `preview --changed-since
+  "$BASE_SHA"` into `$RUNNER_TEMP/usd-asset-gate-previews`, and passes `--previews` to the
+  comment. Every failure on that path is a warning; the script still exits with the check's
+  status. `USD_ASSET_GATE_PREVIEW=false` (action input `preview`) skips it. Mesa is the
+  workflow's job (one `apt-get` step), not the script's. The dogfood workflow
+  (`usd-gate.yml`) installs Mesa and runs it with this repository's config, which enables the
+  preview (`version: 2`); CI's preview job runs the script end to end on a throwaway
+  repository with one fixture change.
 
 ### Distribution (PyPI and GitHub Marketplace)
 

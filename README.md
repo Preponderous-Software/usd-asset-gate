@@ -189,10 +189,10 @@ and advisory: it exits 0 whatever the images show, and when Strata cannot start 
 
 ```bash
 pip install usd-core "usd-asset-gate[preview] @ git+https://github.com/Preponderous-Software/usd-asset-gate@main"
-curl -fsSLO https://github.com/Preponderous-Software/strata/releases/download/v0.4.0/libstrata-0.4.0-linux-x64.so
-echo "6044127f21c33abbd03d4e39182b5a6082c73e92479236bbd0aea6e68594b181  libstrata-0.4.0-linux-x64.so" | sha256sum -c -
+curl -fsSLO https://github.com/Preponderous-Software/strata/releases/download/v0.5.0/libstrata-0.5.0-linux-x64.so
+echo "44f8263426b546c04295b1033032fded97541060c8e804873894d43e80fcffcb  libstrata-0.5.0-linux-x64.so" | sha256sum -c -
 sudo apt-get install -y libegl1 libegl-mesa0 libgl1-mesa-dri           # EGL + llvmpipe
-export STRATA_LIBRARY=$PWD/libstrata-0.4.0-linux-x64.so LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+export STRATA_LIBRARY=$PWD/libstrata-0.5.0-linux-x64.so LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
 
 usd-asset-gate preview --changed-since origin/main --out previews/ --json previews.json \
   --summary "$GITHUB_STEP_SUMMARY"
@@ -211,6 +211,17 @@ preview:
   threshold: 4.0       # ΔE a pixel must exceed to count
   max_fraction: 0.005  # up to this share of pixels is "no visible change"
 ```
+
+**In CI.** `ci/usd-asset-gate.sh` and the composite action run the preview for you on a pull
+request when the config sets `preview.enabled: true`: after the check they download the pinned
+Strata library (0.5.0 by default; `STRATA_VERSION`/`STRATA_SHA256`, or the action's
+`strata-version`/`strata-sha256` inputs), verify its SHA-256, render the changed files before and
+after, add "Visual changes" to the job summary and the same PR comment, and leave the PNGs in
+`$RUNNER_TEMP/usd-asset-gate-previews`. It is advisory there too: the exit code is the check's,
+whatever the preview shows or if it cannot run. The runner needs EGL and Mesa (add a step with
+`sudo apt-get install -y libegl1 libegl-mesa0 libgl1-mesa-dri`); without them the section says
+"preview unavailable". `USD_ASSET_GATE_PREVIEW=false` (action input `preview: "false"`) turns it
+off. This repository's own dogfood workflow runs it on every pull request that changes a fixture.
 
 It draws meshes, the implicit gprims and point instancers in flat display colours. It does not
 draw subdivision, curves, points, volumes, skinning, textures, opacity or scene lights, so "no
