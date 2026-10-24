@@ -439,7 +439,7 @@ changed file are not rendered.
   rotated to Y-up. Over `preview.max_triangles` the file gets a "too large" note.
 - **Rendering** (`preview/strata.py`): Strata's official Python binding (`ctypes` over the
   versioned C ABI), vendored unmodified in `usd_asset_gate/_vendor/strata` from the Strata
-  `v0.5.0` tag (MIT; hashes recorded in `usd_asset_gate/_vendor/__init__.py` and re-checked by
+  `v0.6.0` tag (MIT; hashes recorded in `usd_asset_gate/_vendor/__init__.py` and re-checked by
   a test). The binding has no PyPI release and a direct URL dependency would keep this package
   off PyPI, so it is vendored rather than declared. It checks the ABI major and every struct
   layout at load; the preview needs ABI 1.4+. Headless (EGL surfaceless),
@@ -469,7 +469,7 @@ changed file are not rendered.
 - **In the shell layer:** `ci/usd-asset-gate.sh` (and so the composite action) does exactly
   that after the check, on a pull request (`BASE_SHA` set) whose config enables the preview:
   it installs numpy into its virtualenv, downloads and verifies the pinned library (default
-  Strata 0.5.0; `STRATA_VERSION`/`STRATA_SHA256`, action inputs `strata-version`/
+  Strata 0.6.0; `STRATA_VERSION`/`STRATA_SHA256`, action inputs `strata-version`/
   `strata-sha256`; an existing `STRATA_LIBRARY` is used as is), runs `preview --changed-since
   "$BASE_SHA"` into `$RUNNER_TEMP/usd-asset-gate-previews`, and passes `--previews` to the
   comment. Every failure on that path is a warning; the script still exits with the check's

@@ -36,6 +36,8 @@ RELEASES_URL = "https://github.com/Preponderous-Software/strata/releases/downloa
 KNOWN_RELEASES = {
     ("0.4.0", "linux-x64"): "6044127f21c33abbd03d4e39182b5a6082c73e92479236bbd0aea6e68594b181",
     ("0.4.0", "win-x64"): "1d34a949f74e47055d019e0fc7b646a14d81ce2645f6e0642a7d1b78110fdfe7",
+    ("0.5.0", "linux-x64"): "44f8263426b546c04295b1033032fded97541060c8e804873894d43e80fcffcb",
+    ("0.5.0", "win-x64"): "8a0ae3dedfb13cc5a0a66a4301cba6a625137d7f86e44b13bb8dbd587dfb0bcd",
 }
 
 

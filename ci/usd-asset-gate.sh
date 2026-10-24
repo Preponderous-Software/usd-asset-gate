@@ -33,9 +33,9 @@
 #                             "false" turns it off.
 #   STRATA_LIBRARY            a libstrata.so to use; otherwise the release below is
 #                             downloaded and checked against its pinned SHA-256
-#   STRATA_VERSION            Strata release to download (default 0.5.0)
+#   STRATA_VERSION            Strata release to download (default 0.6.0)
 #   STRATA_SHA256             SHA-256 of libstrata-$STRATA_VERSION-linux-x64.so from that
-#                             release's SHA256SUMS (default: the 0.5.0 value)
+#                             release's SHA256SUMS (default: the 0.6.0 value)
 # The preview needs EGL and a Mesa driver on the runner (for example
 # `sudo apt-get install -y libegl1 libegl-mesa0 libgl1-mesa-dri`); without them it reports
 # "preview unavailable" and the check is unaffected.
@@ -52,8 +52,8 @@ SUMMARY="${GITHUB_STEP_SUMMARY:-}"
 PREVIEW="${USD_ASSET_GATE_PREVIEW:-auto}"
 PREVIEWS="$WORK/usd-asset-gate-previews.json"
 PREVIEW_DIR="$WORK/usd-asset-gate-previews"
-STRATA_VERSION="${STRATA_VERSION:-0.5.0}"
-STRATA_SHA256="${STRATA_SHA256:-44f8263426b546c04295b1033032fded97541060c8e804873894d43e80fcffcb}"
+STRATA_VERSION="${STRATA_VERSION:-0.6.0}"
+STRATA_SHA256="${STRATA_SHA256:-3815068f90afa67b42177359a7ea918a5de321d7f7bad8706fa5275c4906af2a}"
 
 log() { printf 'usd-asset-gate.sh: %s\n' "$*"; }
 

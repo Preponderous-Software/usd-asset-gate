@@ -30,7 +30,7 @@ from ctypes import (
 #: The major version this binding was written against (STRATA_ABI_VERSION).
 ABI_VERSION = 1
 #: The newest minor whose additions this binding declares (STRATA_ABI_MINOR).
-ABI_MINOR = 11
+ABI_MINOR = 12
 
 # ---------------------------------------------------------------- status
 
@@ -388,6 +388,9 @@ FUNCTIONS = {
     "strata_destroy": (0, None, [_engine]),
     "strata_gpu_description": (0, c_char_p, [_engine]),
     "strata_poll_event": (0, c_int32, [_engine, _p(Event)]),
+    "strata_push_event": (12, _status, [_engine, _p(Event)]),
+    "strata_frame_seconds": (12, _status, [_engine, _p(c_double)]),
+    "strata_is_driven": (12, c_int32, [_engine]),
     "strata_get_drawable_size": (0, _status, [_engine, _p(c_int32), _p(c_int32)]),
     "strata_resize": (0, _status, [_engine, c_int32, c_int32]),
     "strata_set_camera": (0, _status, [_engine, _p(Camera)]),

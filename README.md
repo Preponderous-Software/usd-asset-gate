@@ -189,10 +189,10 @@ and advisory: it exits 0 whatever the images show, and when Strata cannot start 
 
 ```bash
 pip install usd-core "usd-asset-gate[preview] @ git+https://github.com/Preponderous-Software/usd-asset-gate@main"
-curl -fsSLO https://github.com/Preponderous-Software/strata/releases/download/v0.5.0/libstrata-0.5.0-linux-x64.so
-echo "44f8263426b546c04295b1033032fded97541060c8e804873894d43e80fcffcb  libstrata-0.5.0-linux-x64.so" | sha256sum -c -
+curl -fsSLO https://github.com/Preponderous-Software/strata/releases/download/v0.6.0/libstrata-0.6.0-linux-x64.so
+echo "3815068f90afa67b42177359a7ea918a5de321d7f7bad8706fa5275c4906af2a  libstrata-0.6.0-linux-x64.so" | sha256sum -c -
 sudo apt-get install -y libegl1 libegl-mesa0 libgl1-mesa-dri           # EGL + llvmpipe
-export STRATA_LIBRARY=$PWD/libstrata-0.5.0-linux-x64.so LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+export STRATA_LIBRARY=$PWD/libstrata-0.6.0-linux-x64.so LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
 
 usd-asset-gate preview --changed-since origin/main --out previews/ --json previews.json \
   --summary "$GITHUB_STEP_SUMMARY"
@@ -214,7 +214,7 @@ preview:
 
 **In CI.** `ci/usd-asset-gate.sh` and the composite action run the preview for you on a pull
 request when the config sets `preview.enabled: true`: after the check they download the pinned
-Strata library (0.5.0 by default; `STRATA_VERSION`/`STRATA_SHA256`, or the action's
+Strata library (0.6.0 by default; `STRATA_VERSION`/`STRATA_SHA256`, or the action's
 `strata-version`/`strata-sha256` inputs), verify its SHA-256, render the changed files before and
 after, add "Visual changes" to the job summary and the same PR comment, and leave the PNGs in
 `$RUNNER_TEMP/usd-asset-gate-previews`. It is advisory there too: the exit code is the check's,
