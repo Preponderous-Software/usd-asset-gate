@@ -34,7 +34,8 @@ classifiers = [
 [project.optional-dependencies]
 test = ["pytest>=8", "numpy>=1.24"]
 # The advisory `preview` subcommand (RFC 0028): numpy here, plus a Strata libstrata.so
-# (STRATA_LIBRARY) and an EGL + Mesa llvmpipe driver on the machine.
+# (STRATA_LIBRARY) and an EGL + Mesa llvmpipe driver on the machine. Strata's Python binding
+# is vendored (usd_asset_gate/_vendor/strata), so it adds no package.
 preview = ["numpy>=1.24"]
 
 [project.scripts]
@@ -46,6 +47,9 @@ Issues = "https://github.com/Preponderous-Software/usd-asset-gate/issues"
 
 [tool.setuptools.packages.find]
 include = ["usd_asset_gate*"]
+
+[tool.setuptools.package-data]
+"usd_asset_gate._vendor.strata" = ["LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

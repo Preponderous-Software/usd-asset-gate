@@ -36,7 +36,14 @@ jobs:
             fetch -q --no-tags origin ${BASE:+"$BASE"} "${GITHUB_SHA}"
           git checkout -q --detach "${GITHUB_SHA}"
 
-      - name: USD asset gate on the changed files (the consumer path, with PR comment)
+      # For the advisory preview (RFC 0028): EGL and Mesa's llvmpipe. Without them the
+      # preview reports "unavailable" and the check is unaffected.
+      - name: Install Mesa (EGL + llvmpipe) for the advisory preview
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends libegl1 libegl-mesa0 libgl1-mesa-dri
+
+      - name: USD asset gate on the changed files (the consumer path, with PR comment and previews)
         env:
           GITHUB_TOKEN: ${{ github.token }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -96,6 +103,11 @@ jobs:
           git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)" \
             fetch -q --no-tags origin ${BASE:+"$BASE"} "${GITHUB_SHA}"
           git checkout -q --detach "${GITHUB_SHA}"
+
+      - name: Install Mesa (EGL + llvmpipe) for the advisory preview
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends libegl1 libegl-mesa0 libgl1-mesa-dri
 
       # A local action path, not a third-party action: it runs this checkout's action.yml.
       - name: USD asset gate (composite action)

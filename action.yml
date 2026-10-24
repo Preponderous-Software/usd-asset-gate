@@ -41,6 +41,18 @@ inputs:
     description: Token for fetching the base commit and writing the PR comment.
     required: false
     default: ${{ github.token }}
+  preview:
+    description: 'Advisory visual diffs (RFC 0028). "auto" renders the changed files before and after with Strata when the config sets `preview.enabled: true`, adding "Visual changes" to the job summary and the PR comment; "false" turns it off. Never changes the exit code. Needs EGL and a Mesa driver on the runner (libegl1 libegl-mesa0 libgl1-mesa-dri), else it reports "preview unavailable".'
+    required: false
+    default: "auto"
+  strata-version:
+    description: Strata release whose libstrata-<version>-linux-x64.so the preview downloads.
+    required: false
+    default: "0.5.0"
+  strata-sha256:
+    description: SHA-256 of that library, from the release's SHA256SUMS.
+    required: false
+    default: "44f8263426b546c04295b1033032fded97541060c8e804873894d43e80fcffcb"
 
 runs:
   using: composite
@@ -56,4 +68,7 @@ runs:
         USD_CORE_VERSION: ${{ inputs.usd-core-version }}
         USD_ASSET_GATE_SPEC: ${{ github.action_path }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
+        USD_ASSET_GATE_PREVIEW: ${{ inputs.preview }}
+        STRATA_VERSION: ${{ inputs.strata-version }}
+        STRATA_SHA256: ${{ inputs.strata-sha256 }}
       run: bash "$GITHUB_ACTION_PATH/ci/usd-asset-gate.sh"

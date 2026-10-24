@@ -159,7 +159,9 @@ criteria above are met. Owner decisions of 2026-10-17, detailed in
   version-pinned OpenUSD build, fetched or built with plain `docker` commands (no `uses:`).
 - **Preview (advisory)** — owner decision of 2026-10-23 (RFC 0028): `usd-asset-gate preview`
   renders before/after images of changed assets headless with Strata and diffs them; never
-  fails the check. A light tier beside the thumbnail container, not a replacement. Detailed in
-  [ARCHITECTURE.md](ARCHITECTURE.md#preview-strata-headless-advisory).
+  fails the check. A light tier beside the thumbnail container, not a replacement. Since
+  2026-10-24 `ci/usd-asset-gate.sh` and the composite action run it on pull requests when the
+  config enables it (still advisory), on Strata 0.5.0 through Strata's official Python binding.
+  Detailed in [ARCHITECTURE.md](ARCHITECTURE.md#preview-strata-headless-advisory).
 - **NVIDIA rule source** — `usd-validation-nvidia` as an optional extra
   (`pip install usd-asset-gate[nvidia]`); core runtime dependencies stay `usd-core` + `PyYAML`.
