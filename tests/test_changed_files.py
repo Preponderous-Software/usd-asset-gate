@@ -72,6 +72,13 @@ def test_paths_narrow_the_changed_set(repo, cli):
     assert [f["path"] for f in json.loads(out)["files"]] == ["other/x.usda"]
 
 
+def test_missing_narrowing_path_exits_2_naming_it(repo, cli):
+    code, out, err = cli("check", "--config", str(DEFAULT_CONFIG), "--changed-since", "main", "nope")
+    assert code == 2
+    assert out == ""
+    assert "no such file or directory: nope" in err
+
+
 def test_include_exclude_apply_to_changed_files(repo, cli):
     (repo / ".usd-asset-gate.yml").write_text("exclude: ['assets/new.usda']\n")
     code, out, _ = cli("check", "--format", "json", "--changed-since", "main")

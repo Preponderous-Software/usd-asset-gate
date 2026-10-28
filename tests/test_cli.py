@@ -116,10 +116,85 @@ def test_help_works_without_pxr(tmp_path):
     assert proc.returncode == 0
 
 
+def test_too_old_usd_core_exits_2_naming_the_floor(monkeypatch, cli):
+    from pxr import Usd
+
+    monkeypatch.setattr(Usd, "GetVersion", lambda: (0, 24, 11))
+    code, out, err = cli("check", *DEFAULTS, VALID)
+    assert code == 2
+    assert out == ""
+    assert "usd-core 24.11 is too old" in err
+    assert "usd-core >= 25.8" in err
+
+
+def test_verbose_prints_openusd_diagnostics_to_stderr(monkeypatch, cli):
+    from usd_asset_gate import runner as runner_mod
+    from usd_asset_gate.model import Report
+
+    report = Report(files=["a.usda"], findings=[], diagnostics={"a.usda": ["Warning: one", "Warning: two"]})
+    monkeypatch.setattr(runner_mod.Runner, "run", lambda self, files, fail_on=None: report)
+    code, _, err = cli("check", *DEFAULTS, VALID)
+    assert code == 0
+    assert err == ""
+    code, _, err = cli("check", *DEFAULTS, "--verbose", VALID)
+    assert code == 0
+    assert err == "a.usda: openusd: Warning: one\na.usda: openusd: Warning: two\n"
+
+
+def test_max_annotations_caps_each_severity(cli):
+    case = FAIL_DIR / "bad_prim_names"
+    args = ("check", "--config", str(case / ".usd-asset-gate.yml"), "--format", "github", str(case))
+    code, out, _ = cli(*args)
+    assert code == 1
+    assert sum(line.startswith("::error ") for line in out.splitlines()) == 2
+    assert "not annotated" not in out
+    code, out, _ = cli(*args, "--max-annotations", "1")
+    assert code == 1
+    lines = out.splitlines()
+    assert sum(line.startswith("::error ") for line in lines) == 1
+    assert lines[1] == (
+        "::notice title=usd-asset-gate::1 more finding(s) are not annotated; "
+        "see the job summary and the log for the full list."
+    )
+
+
+def test_comment_with_unreadable_previews_exits_2(tmp_path, cli):
+    from usd_asset_gate.model import Report
+    from usd_asset_gate.report import json as json_report
+
+    report = tmp_path / "report.json"
+    report.write_text(json_report.render(Report(files=[], findings=[])))
+    previews = tmp_path / "previews.json"
+    previews.write_text('{"status": "ok"}')
+    code, out, err = cli("comment", "--from", str(report), "--previews", str(previews))
+    assert code == 2
+    assert out == ""
+    assert f"cannot read previews {previews}" in err
+    assert "no 'files'" in err
+
+
 def test_rules_subcommand_lists_rules(cli):
     code, out, _ = cli("rules", "--format", "json")
     assert code == 0
     assert any(r["rule"] == "stage-open" for r in json.loads(out)["rules"])
+
+
+def test_rules_text_header_without_a_config_file(tmp_path, cli):
+    code, out, _ = cli("rules", "--path", "assets/a.usda", cwd=tmp_path)
+    assert code == 0
+    assert out.startswith("config: (defaults)\npath: assets/a.usda\nfail_on: error\n\n")
+
+
+def test_rules_text_shows_params_and_claiming_aliases(tmp_path, cli):
+    config = tmp_path / "gate.yml"
+    config.write_text("version: 1\nrules:\n  prim-budget: {max_prims: 100}\n")
+    code, out, _ = cli("rules", "--config", str(config))
+    assert code == 0
+    assert out.startswith(f"config: {config}\nfail_on: error\n\n")
+    lines = out.splitlines()
+    assert 'prim-budget  [house, enabled, severity warning]  {"max_prims": 100}' in lines
+    (composition,) = [line for line in lines if line.startswith("upstream:usdValidation:CompositionErrorTest  [")]
+    assert composition.endswith("  (claimed by unresolved-references, unresolved-sublayers when enabled)")
 
 
 def test_tf_error_messages_keep_spaces_inside_paths():
