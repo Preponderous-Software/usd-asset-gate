@@ -76,10 +76,10 @@ The MVP is defined in [`MVP.md`](MVP.md) and tracked as issues labelled `mvp`.
 **Planned after the MVP**
 - Publishing to PyPI (`usd-asset-gate`) and listing the action on the GitHub Marketplace.
 - Thumbnails of changed assets in the PR comment, rendered by `usdrecord` in an optional full-OpenUSD Docker image.
+- NVIDIA `usd-validation-nvidia` as an optional extra rule source (`pip install usd-asset-gate[nvidia]`).
 
 **Visual diffs (advisory, opt-in)**
 - `usd-asset-gate preview`: before/after images of changed assets, rendered headless by [Strata](https://github.com/Preponderous-Software/strata), with a ΔE diff and a "Visual changes" section in the job summary and PR comment. Never fails the check. See [Visual diffs](#visual-diffs-advisory).
-- NVIDIA `usd-validation-nvidia` as an optional extra rule source (`pip install usd-asset-gate[nvidia]`).
 
 > For the full design, see [`ARCHITECTURE.md`](ARCHITECTURE.md). For the problem, audience and prior art, see [`CONCEPT.md`](CONCEPT.md).
 
@@ -91,6 +91,7 @@ The MVP is defined in [`MVP.md`](MVP.md) and tracked as issues labelled `mvp`.
 - [`usd-core`](https://pypi.org/project/usd-core/) (OpenUSD Python bindings; 26.8 targeted)
 - PyYAML (configuration)
 - Python standard library for everything else (GitHub API calls included)
+- numpy and a Strata `libstrata.so` (optional, only for `preview`)
 - pytest (tests)
 - Bash + GitHub Actions composite action (CI packaging)
 
@@ -102,7 +103,7 @@ Layout:
 
 usd-asset-gate/  
  ├── usd_asset_gate/          # Python package  
- │    ├── cli.py              # check / rules / comment subcommands  
+ │    ├── cli.py              # check / rules / comment / preview subcommands  
  │    ├── model.py            # Finding, Severity, Report  
  │    ├── runner.py           # runs rules over files, collects findings  
  │    ├── stage.py            # opens each stage once, captures diagnostics  
@@ -110,11 +111,13 @@ usd-asset-gate/
  │    ├── discovery.py        # paths, globs, changed-since-ref  
  │    ├── rules/              # upstream adapter (upstream.py) and house rules  
  │    ├── preview/            # advisory visual diffs: USD → triangles, Strata, ΔE  
- │    └── report/             # text, JSON, annotations, summary, PR comment  
+ │    ├── report/             # text, JSON, annotations, summary, PR comment  
+ │    └── _vendor/strata/     # Strata's Python binding, vendored unmodified  
  ├── schema/                 # JSON Schema for .usd-asset-gate.yml  
  ├── ci/usd-asset-gate.sh     # copy-in script for local-only CI  
  ├── action.yml               # composite GitHub Action  
  ├── examples/                # workflows for both modes  
+ ├── docs/                    # README images and the scripts that regenerate them  
  ├── tests/fixtures/          # USD files that must pass or fail  
  ├── CONCEPT.md               # Problem, audience, non-goals, prior art  
  ├── MVP.md                   # MVP scope, acceptance criteria, milestones  

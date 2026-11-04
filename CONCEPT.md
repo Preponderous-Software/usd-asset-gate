@@ -74,8 +74,9 @@ Each run combines:
 - **No auto-fixing in CI.** The OpenUSD framework exposes fixers
   (`ValidationError.GetFixers()`), but a CI gate that rewrites binary assets on a branch is
   out of scope. Reports may mention that a fixer exists.
-- **No render-quality judgement.** Thumbnails, if added, are a visual aid for reviewers, not
-  an image-diff test.
+- **No render-quality judgement.** Thumbnails, if added, and the advisory `preview` are
+  visual aids for reviewers, not an image-diff test: the preview's ΔE comparison never changes
+  the exit code.
 - **No asset management.** No storage, versioning, LFS handling or asset-resolver plugins
   beyond OpenUSD's default resolver.
 - **Not a schema or profile authoring tool.** Industry profiles (for example NVIDIA's
