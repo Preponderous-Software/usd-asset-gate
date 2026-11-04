@@ -1,8 +1,9 @@
 # usd-asset-gate — Architecture
 
 > Status: MVP implemented (milestones M1–M8). This document describes the code as built;
-> the post-MVP sections are still plans. API names for OpenUSD were checked against
-> `usd-core` 26.8 (OpenUSD v26.08) on 2026-10-17.
+> the post-MVP sections are still plans, except [Preview](#preview-strata-headless-advisory),
+> which is implemented. API names for OpenUSD were checked against `usd-core` 26.8
+> (OpenUSD v26.08) on 2026-10-17.
 
 ## Overview
 
@@ -43,7 +44,7 @@ shell layer, so the same core runs from a laptop, a pre-commit hook or any CI sy
 | Rule registry | `rules/registry.py` | Rule IDs, defaults, parameter schemas, the alias table to upstream validators (each alias *claims* specific upstream errors). |
 | Reporters | `report/{text,json,github,summary}.py` | Render findings for each output. |
 | PR commenter | `report/comment.py` | Create-or-update one PR comment with `urllib.request`. |
-| Preview (advisory) | `preview/{flatten,strata,compare,run}.py`, `report/previews.py` | Before/after images of changed assets rendered headless by Strata, compared with Strata's ΔE policy. Imported only by `preview` and `comment --previews`. See [Preview](#preview-strata-headless-advisory). |
+| Preview (advisory) | `preview/{flatten,strata,compare,run}.py`, `report/previews.py`, `_vendor/strata/` | Before/after images of changed assets rendered headless by Strata, compared with Strata's ΔE policy. Imported only by `preview` and `comment --previews`. See [Preview](#preview-strata-headless-advisory). |
 | Shell layer | `action.yml`, `ci/usd-asset-gate.sh` | Checkout, install, invoke the CLI; no logic beyond plumbing. |
 
 ## Data flow for one run
@@ -220,6 +221,12 @@ and `PyYAML`. Errors name the key path, for example
 `rules.prim-budget.max_prims: expected integer, got string` or
 `rules.prim-budgt: unknown rule`, and exit 2.
 
+`version: 2` accepts everything above plus one top-level key, `preview`, for the advisory
+visual diffs; with `version: 1` that key is a config error. Its keys and defaults are
+`enabled` (`false`), `views` (`[three_quarter, three_quarter_back]`; also `top`, `front`),
+`size` (`[640, 360]`), `max_triangles` (2000000), `threshold` (4.0) and `max_fraction`
+(0.005); see [Preview](#preview-strata-headless-advisory).
+
 Resolution rules, as implemented:
 
 - **File lookup.** `--config <file>`, else `.usd-asset-gate.yml` in the working directory,
@@ -266,7 +273,8 @@ The composite action itself uses no other actions: its single step runs
 `ci/usd-asset-gate.sh` with `bash`, installing `usd-core` and the action's own source tree
 with `pip`, so pinning it by commit SHA pins everything. Inputs: `config`,
 `usd-core-version`, `paths`, `comment`, `fail-on`, `base-sha` (default: the pull request's
-base SHA) and `github-token` (default: `github.token`). A full example is in
+base SHA), `github-token` (default: `github.token`), and for the advisory preview `preview`
+(default `auto`), `strata-version` and `strata-sha256`. A full example is in
 [`examples/workflow-action.yml`](examples/workflow-action.yml).
 
 ### Mode B — local-only (no third-party `uses:`)
@@ -316,9 +324,12 @@ The complete file is [`examples/workflow-local-only.yml`](examples/workflow-loca
    --summary "$GITHUB_STEP_SUMMARY" --json "$RUNNER_TEMP/usd-asset-gate-report.json"`
    (`USD_ASSET_GATE_PATHS`, `USD_ASSET_GATE_CONFIG` and `USD_ASSET_GATE_FAIL_ON` adjust it;
    without `BASE_SHA` it checks the given paths or the whole repository);
-4. runs `usd-asset-gate comment --from …` unless `USD_ASSET_GATE_COMMENT=false`; a comment
+4. on a pull request whose config enables it, runs the advisory preview (see
+   [Preview](#preview-strata-headless-advisory)); a preview failure is a warning and never
+   changes the result;
+5. runs `usd-asset-gate comment --from …` unless `USD_ASSET_GATE_COMMENT=false`; a comment
    failure becomes a warning annotation and never changes the result;
-5. exits with the `check` exit code.
+6. exits with the `check` exit code.
 
 The token is passed through `http.extraheader` for the fetch only and is never written into
 `.git/config`; this repository's dogfood workflow asserts that after the run.
@@ -330,6 +341,7 @@ The token is passed through `http.extraheader` for the fetch only and is never w
 | Python | 3.10–3.13 (CI matrix); `usd-core` 26.8 wheels exist for 3.9–3.14 | Runtime. |
 | [`usd-core`](https://pypi.org/project/usd-core/) | `>=25.08` supported, `26.8` tested and default | `pxr.Usd`, `pxr.UsdUtils`, `pxr.UsdValidation`. `UsdValidation` ships in wheels from 25.02; 25.08 is where `usdchecker` made the framework its default, so it is the floor. Note: the wheel contains no `usdchecker`/`usdrecord` executables and no imaging modules. |
 | [`PyYAML`](https://pypi.org/project/PyYAML/) | `>=6.0` (6.0.3 current) | Config parsing (`yaml.safe_load` only). |
+| `numpy` | `>=1.24` (optional: `[preview]` and `[test]` extras) | Preview arrays and ΔE comparison, and the tests that cover them. |
 | `pytest` | `>=8` (dev only) | Tests. |
 | `git` | any recent | Changed-file discovery; must be on `PATH` (it is on GitHub-hosted runners). |
 
@@ -372,8 +384,9 @@ Strata `libstrata.so` and Mesa's EGL/llvmpipe on the machine), used only by `pre
   consumer would (plain-git checkout, `bash ci/usd-asset-gate.sh`, PR comment) on the USD
   files a pull request changes, using this repository's `.usd-asset-gate.yml` (which
   includes only `tests/fixtures/pass/**`). It then checks all of `tests/fixtures/pass/`
-  (must pass), every `tests/fixtures/fail/<case>/` with its own config (each must exit 1),
-  and that no `http.extraheader` was left in `.git/config`. A second job runs the composite
+  (must pass), every `tests/fixtures/fail/<case>/` with its own config, or
+  `tests/fixtures/default-config.yml` when it has none (each must exit 1), and that no
+  `http.extraheader` was left in `.git/config`. A second job runs the composite
   action from the checkout (`uses: ./`). Fail cases whose defect is only a violation of
   their own config (`wrong_meters_per_unit`, `wrong_kind`, `over_prim_budget`,
   `low_instancing`) would pass under the repository config if moved into `pass/`; every
@@ -381,8 +394,9 @@ Strata `libstrata.so` and Mesa's EGL/llvmpipe on the machine), used only by `pre
 
 ## Post-MVP roadmap
 
-None of this is started until the MVP acceptance criteria in [MVP.md](MVP.md) are met. Each
-item follows from a decision recorded under [Decisions](#decisions).
+Started only once the MVP acceptance criteria in [MVP.md](MVP.md) are met. Each item follows
+from a decision recorded under [Decisions](#decisions). [Preview](#preview-strata-headless-advisory)
+is implemented; the other items are still plans.
 
 ### Thumbnails (full OpenUSD container)
 
