@@ -316,6 +316,26 @@ def test_cli_usage_errors_exit_2(repo, cli):
     assert cli("preview", "--changed-since", "no-such-ref", "--out", str(repo / "o"), cwd=repo)[0] == 2
 
 
+@pytest.mark.parametrize("flag", ["--json", "--summary"])
+def test_cli_unwritable_output_exits_2_after_printing_the_section(tmp_path, cli, monkeypatch, flag):
+    monkeypatch.setenv("STRATA_LIBRARY", str(tmp_path / "no-such-libstrata.so"))
+    target = str(tmp_path / "no-such-dir" / "out")
+    minimal = str(PASS_DIR / "minimal.usda")
+    code, stdout, err = cli("preview", "--force", "--out", "o", flag, target, minimal, cwd=tmp_path)
+    assert code == 2
+    assert "Preview unavailable" in stdout
+    assert err.startswith(f"usd-asset-gate: error: cannot write {target}: ")
+
+
+def test_cli_out_that_cannot_be_created_exits_2(tmp_path, cli):
+    (tmp_path / "file").write_text("")
+    out = str(tmp_path / "file" / "out")
+    code, stdout, err = cli("preview", "--force", "--out", out, str(PASS_DIR / "minimal.usda"), cwd=tmp_path)
+    assert code == 2
+    assert stdout == ""
+    assert err.startswith(f"usd-asset-gate: error: cannot write {out}: ")
+
+
 def test_check_never_imports_the_preview_package():
     code = (
         "import sys; from usd_asset_gate.cli import main; main(['check', %r]); "

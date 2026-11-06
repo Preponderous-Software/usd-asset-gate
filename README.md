@@ -147,7 +147,8 @@ The same run in a terminal (`--format text`, the default):
 
 Both images are regenerated from the fixtures by [`docs/capture_readme.py`](docs/capture_readme.py).
 
-Exit codes: `0` pass, `1` findings at or above `fail_on`, `2` usage or config error.
+Exit codes: `0` pass, `1` findings at or above `fail_on`, `2` usage or config error
+(including an output path that cannot be written).
 
 Add a `.usd-asset-gate.yml` at the repository root to set house rules (every key is
 optional; the full schema is in [`ARCHITECTURE.md`](ARCHITECTURE.md#configuration-schema)

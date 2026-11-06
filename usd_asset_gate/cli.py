@@ -9,7 +9,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from typing import Sequence
+from contextlib import contextmanager
+from typing import Iterator, Sequence
 
 from . import __version__
 from .discovery import DiscoveryError, expand_paths
@@ -25,6 +26,15 @@ MIN_USD_VERSION = (0, 25, 8)
 
 class UsageError(Exception):
     """Reported on stderr; the CLI exits 2."""
+
+
+@contextmanager
+def writing(path: str) -> Iterator[None]:
+    """Turn an ``OSError`` from writing the output file ``path`` into a ``UsageError``."""
+    try:
+        yield
+    except OSError as exc:
+        raise UsageError(f"cannot write {path}: {exc}") from None
 
 
 def require_pxr() -> None:
@@ -230,11 +240,6 @@ def cmd_check(args: argparse.Namespace) -> int:
         for path, lines in report.diagnostics.items():
             for line in lines:
                 sys.stderr.write(f"{path}: openusd: {line}\n")
-    if args.json_file:
-        with open(args.json_file, "w", encoding="utf-8") as fh:
-            fh.write(json_report.render(report))
-    if args.summary:
-        summary_report.append_to(args.summary, summary_report.render(report))
     if args.format == "json":
         sys.stdout.write(json_report.render(report))
     elif args.format == "github":
@@ -245,6 +250,12 @@ def cmd_check(args: argparse.Namespace) -> int:
         sys.stdout.write(github_report.guarded(text_report.render(report)))
     else:
         sys.stdout.write(text_report.render(report, colour=text_report.use_colour(sys.stdout)))
+    if args.json_file:
+        with writing(args.json_file), open(args.json_file, "w", encoding="utf-8") as fh:
+            fh.write(json_report.render(report))
+    if args.summary:
+        with writing(args.summary):
+            summary_report.append_to(args.summary, summary_report.render(report))
     return report.exit_code
 
 
@@ -405,6 +416,8 @@ def cmd_preview(args: argparse.Namespace) -> int:
         sys.stdout.write("usd-asset-gate preview: skipped (preview.enabled is not true; pass --force)\n")
         return EXIT_PASS
     settings = preview_run.Settings.from_config(config.preview)
+    with writing(args.out):
+        os.makedirs(args.out, exist_ok=True)
     if not args.changed_since:
         if not args.paths:
             raise UsageError("no paths given (pass files or directories, or --changed-since REF)")
@@ -430,13 +443,14 @@ def cmd_preview(args: argparse.Namespace) -> int:
                     doc = preview_run.run(files, args.out, settings, Renderer)
             except DiscoveryError as exc:
                 raise UsageError(f"--changed-since {args.changed_since}: {exc}") from None
-    if args.json_file:
-        preview_run.write_json(doc, args.json_file)
     section = previews_md.render(doc)
-    if args.summary:
-        with open(args.summary, "a", encoding="utf-8") as fh:
-            fh.write(section + "\n")
     sys.stdout.write(section)
+    if args.json_file:
+        with writing(args.json_file):
+            preview_run.write_json(doc, args.json_file)
+    if args.summary:
+        with writing(args.summary), open(args.summary, "a", encoding="utf-8") as fh:
+            fh.write(section + "\n")
     return EXIT_PASS
 
 

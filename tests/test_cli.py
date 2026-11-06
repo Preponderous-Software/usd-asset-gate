@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from conftest import DEFAULT_CONFIG, FAIL_DIR, PASS_DIR, REPO_ROOT, run_cli
 
 DEFAULTS = ("--config", str(DEFAULT_CONFIG))
@@ -171,6 +172,16 @@ def test_comment_with_unreadable_previews_exits_2(tmp_path, cli):
     assert out == ""
     assert f"cannot read previews {previews}" in err
     assert "no 'files'" in err
+
+
+@pytest.mark.parametrize("flag", ["--json", "--summary"])
+def test_unwritable_output_exits_2_after_printing_the_report(tmp_path, cli, flag):
+    target = str(tmp_path / "no-such-dir" / "out")
+    code, out, err = cli("check", *DEFAULTS, flag, target, BROKEN)
+    assert code == 2  # not 1, which would read as a failing asset
+    assert "FAIL: 1 file checked, 1 error(s)" in out
+    assert err.startswith(f"usd-asset-gate: error: cannot write {target}: ")
+    assert err.count("\n") == 1
 
 
 def test_rules_subcommand_lists_rules(cli):
