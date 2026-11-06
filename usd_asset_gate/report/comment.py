@@ -121,7 +121,11 @@ def urllib_transport(method: str, url: str, headers: dict[str, str], data: bytes
     try:
         with urllib.request.urlopen(request, timeout=30) as resp:
             raw = resp.read()
-            return resp.status, dict(resp.headers), json.loads(raw) if raw else None
+            try:
+                payload = json.loads(raw) if raw else None
+            except ValueError:
+                raise CommentError(f"{method} {url} answered HTTP {resp.status} with a body that is not JSON") from None
+            return resp.status, dict(resp.headers), payload
     except urllib.error.HTTPError as exc:
         raw = exc.read()
         try:

@@ -585,6 +585,26 @@ def test_urllib_transport_decodes_answers_and_error_bodies(canned, status, raw, 
     assert headers["Content-Length"] == str(len(raw))
 
 
+@pytest.mark.parametrize("raw", [b"<html>sign in</html>", b"\xff"])
+def test_urllib_transport_reports_a_success_body_that_is_not_json(canned, raw):
+    answer, url = canned
+    answer.update(status=200, body=raw)
+    with pytest.raises(comment.CommentError) as raised:
+        comment.urllib_transport("GET", url, {}, None)
+    assert str(raised.value) == f"GET {url} answered HTTP 200 with a body that is not JSON"
+
+
+def test_success_body_that_is_not_json_exits_2(canned, cli, tmp_path, monkeypatch):
+    answer, url = canned
+    answer.update(status=200, body=b"<html>sign in</html>")
+    monkeypatch.setenv("GITHUB_TOKEN", TOKEN)
+    monkeypatch.setenv("GITHUB_REPOSITORY", REPO)
+    monkeypatch.setenv("GITHUB_API_URL", url.rstrip("/"))
+    code, _, err = cli("comment", "--from", write_report(tmp_path, failing_report()), "--pr", str(PR))
+    assert code == 2
+    assert "with a body that is not JSON" in err
+
+
 def _refuse_connections(monkeypatch):
     def refuse(request, timeout):
         raise urllib.error.URLError("connection refused")

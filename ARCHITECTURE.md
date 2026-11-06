@@ -70,7 +70,9 @@ shell layer, so the same core runs from a laptop, a pre-commit hook or any CI sy
    3. Compute `UsdUtils.ComputeUsdStageStats(stage)` once.
    4. Run the upstream adapter, then every enabled house rule, against the shared context.
 4. **Collect** `Finding`s, apply severity overrides, sort by file / severity / rule.
-5. **Report** to every requested output; compute the exit code from `fail_on`.
+5. **Report** to every requested output; compute the exit code from `fail_on`. A `--json` or
+   `--summary` file that cannot be written exits 2 naming the path, after the report has
+   gone to stdout, so a mistyped path is not mistaken for a failing asset.
 
 ## Finding model
 
@@ -253,7 +255,7 @@ Resolution rules, as implemented:
 | JSON | `--format json`, or `--json <file>` alongside any format | `{ "version": 1, "tool": {...}, "files": [{path, findings, diagnostics}], "findings": [...], "summary": {...} }`; stable, documented, used by the comment step. |
 | GitHub annotations | `--format github` | `::error` / `::warning` / `::notice` `file=<path>,line=<n>,title=usd-asset-gate: <rule>::<message>` workflow commands, escaped as `@actions/toolkit` does (`%`, CR, LF in data; also `:` and `,` in properties), followed by the text report for the log, wrapped in `::stop-commands::<random token>` … `::<token>::` so file names or messages from the pull request cannot forge workflow commands. GitHub shows only a limited number of annotations per step and the workflow-commands page does not state the number (checked 2026-10-18), so the reporter emits the most severe first, at most 10 per severity by default (`--max-annotations N`), then one notice counting the rest. `line` is filled best-effort for `.usda` root layers by following the prim hierarchy through the text (each path component must be a direct child of the previous one, outside strings, comments and metadata); when that cannot be established, `line` stays unset. |
 | Job summary | `--summary <file>` | Appends Markdown to `$GITHUB_STEP_SUMMARY`: verdict and totals, a table of files with findings, a count of clean files, and a findings table in a `<details>` block. GitHub limits each step's summary to 1 MiB (workflow-commands docs, checked 2026-10-18); the renderer keeps under 960 KiB by dropping finding rows and saying how many were left out. |
-| PR comment | `usd-asset-gate comment --from report.json` | One comment per PR, found by the hidden marker `<!-- usd-asset-gate:report -->` and edited with `PATCH /repos/{owner}/{repo}/issues/comments/{id}`; created with `POST …/issues/{n}/comments` if absent. When all findings clear, the comment is edited to a short "all checks pass" note, not deleted, so the history stays readable. Requires `pull-requests: write` (or `issues: write`). Comments are listed with `per_page=100`, following `Link: rel="next"`; the comment whose body starts with the marker is edited. A run that checked no USD files only edits an existing comment and never starts one. Bodies stay under GitHub's 65,536-character limit by dropping finding rows with a link to the workflow run. With no token, no `GITHUB_REPOSITORY` or no PR number (from `GITHUB_EVENT_PATH` or `--pr`), or on `401`/`403` (for example, a PR from a fork, where `GITHUB_TOKEN` is read-only) it logs why and exits 0; any other HTTP failure exits 2. The command does not import `pxr`; the log, annotations and job summary still carry the results. `pull_request_target` is never used to work around this (see [Decisions](#decisions)). |
+| PR comment | `usd-asset-gate comment --from report.json` | One comment per PR, found by the hidden marker `<!-- usd-asset-gate:report -->` and edited with `PATCH /repos/{owner}/{repo}/issues/comments/{id}`; created with `POST …/issues/{n}/comments` if absent. When all findings clear, the comment is edited to a short "all checks pass" note, not deleted, so the history stays readable. Requires `pull-requests: write` (or `issues: write`). Comments are listed with `per_page=100`, following `Link: rel="next"`; the comment whose body starts with the marker is edited. A run that checked no USD files only edits an existing comment and never starts one. Bodies stay under GitHub's 65,536-character limit by dropping finding rows with a link to the workflow run. With no token, no `GITHUB_REPOSITORY` or no PR number (from `GITHUB_EVENT_PATH` or `--pr`), or on `401`/`403` (for example, a PR from a fork, where `GITHUB_TOKEN` is read-only) it logs why and exits 0; any other HTTP failure, including a success answer whose body is not JSON, exits 2. The command does not import `pxr`; the log, annotations and job summary still carry the results. `pull_request_target` is never used to work around this (see [Decisions](#decisions)). |
 
 ## Running in GitHub Actions
 
@@ -471,8 +473,9 @@ changed file are not rendered.
   `--summary`), and `comment --from report.json --previews previews.json` appends the same
   section to the one PR comment. The section always lists what is not drawn.
 - **Exit code:** 0 whatever the images show and when Strata cannot start ("preview
-  unavailable"); 2 only on a usage or config error. Opt-in with `preview.enabled: true`
-  (config `version: 2`) or `--force`.
+  unavailable"); 2 only on a usage or config error, which includes an `--out`, `--json` or
+  `--summary` path that cannot be written. Opt-in with `preview.enabled: true` (config
+  `version: 2`) or `--force`.
 - **Images:** written to `--out`. A workflow that allows `uses:` can upload them with
   `actions/upload-artifact`; a plain `run:` step cannot upload an artifact, so in the
   local-only mode they stay on the runner and the job summary carries the numbers. This
