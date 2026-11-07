@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import threading
 import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -627,3 +628,65 @@ def test_unreachable_api_exits_2(cli, tmp_path, monkeypatch):
     code, _, err = cli("comment", "--from", write_report(tmp_path, failing_report()), "--pr", str(PR))
     assert code == 2
     assert "cannot reach https://api.test/" in err
+
+
+@pytest.fixture
+def hangs_up():
+    """A raw socket that reads one request, sends ``reply`` and closes; yields (answer, url)."""
+    answer = {"reply": b""}
+    listener = socket.create_server(("127.0.0.1", 0))
+    listener.settimeout(5)
+
+    def serve():
+        try:
+            conn, _ = listener.accept()
+        except OSError:
+            return
+        with conn:
+            conn.recv(65536)
+            conn.sendall(answer["reply"])
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    yield answer, f"http://127.0.0.1:{listener.getsockname()[1]}/"
+    thread.join()
+    listener.close()
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        pytest.param(b"", id="closed-without-an-answer"),
+        pytest.param(b"not http\r\n\r\n", id="not-http"),
+        pytest.param(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n{", id="truncated-success"),
+        pytest.param(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 100\r\n\r\n{", id="truncated-error"),
+    ],
+)
+def test_urllib_transport_reports_a_lost_connection(hangs_up, reply):
+    answer, url = hangs_up
+    answer["reply"] = reply
+    with pytest.raises(comment.CommentError) as raised:
+        comment.urllib_transport("GET", url, {}, None)
+    message = str(raised.value)
+    assert message.startswith(f"lost the connection to {url}: ")
+    assert message == message.strip()
+
+
+def test_urllib_transport_reports_a_read_timeout(monkeypatch):
+    def time_out(request, timeout):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(comment.urllib.request, "urlopen", time_out)
+    with pytest.raises(comment.CommentError) as raised:
+        comment.urllib_transport("GET", "https://api.test/x", {}, None)
+    assert str(raised.value) == "lost the connection to https://api.test/x: timed out"
+
+
+def test_lost_connection_exits_2(hangs_up, cli, tmp_path, monkeypatch):
+    _, url = hangs_up
+    monkeypatch.setenv("GITHUB_TOKEN", TOKEN)
+    monkeypatch.setenv("GITHUB_REPOSITORY", REPO)
+    monkeypatch.setenv("GITHUB_API_URL", url.rstrip("/"))
+    code, _, err = cli("comment", "--from", write_report(tmp_path, failing_report()), "--pr", str(PR))
+    assert code == 2
+    assert "lost the connection to " in err

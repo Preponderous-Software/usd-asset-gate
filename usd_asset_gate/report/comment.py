@@ -16,6 +16,7 @@ without posting. The log, annotations and job summary still carry the results.
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import re
@@ -117,6 +118,16 @@ Transport = Callable[[str, str, dict[str, str], bytes | None], tuple[int, dict[s
 
 
 def urllib_transport(method: str, url: str, headers: dict[str, str], data: bytes | None):
+    try:
+        return _exchange(method, url, headers, data)
+    except urllib.error.URLError as exc:
+        raise CommentError(f"cannot reach {url}: {exc.reason}") from None
+    except (OSError, http.client.HTTPException) as exc:
+        # urllib wraps only failures while sending; reading the answer raises these as they are.
+        raise CommentError(f"lost the connection to {url}: {str(exc).strip()}") from None
+
+
+def _exchange(method: str, url: str, headers: dict[str, str], data: bytes | None):
     request = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=30) as resp:
@@ -133,8 +144,6 @@ def urllib_transport(method: str, url: str, headers: dict[str, str], data: bytes
         except ValueError:
             payload = raw.decode("utf-8", errors="replace")
         return exc.code, dict(exc.headers or {}), payload
-    except urllib.error.URLError as exc:
-        raise CommentError(f"cannot reach {url}: {exc.reason}") from None
 
 
 class Client:
