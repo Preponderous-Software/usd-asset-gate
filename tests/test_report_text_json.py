@@ -228,9 +228,9 @@ def _report_with(**changes):
 @pytest.mark.parametrize(
     "data, message",
     [
-        ([], "top level is a JSON list"),
-        ("report", "top level is a JSON str"),
-        (None, "top level is a JSON NoneType"),
+        ([], "top level is a JSON array"),
+        ("report", "top level is a JSON string"),
+        (None, "top level is a JSON null"),
         (_report_with(files=["a.usda"]), "malformed report: "),
         (_report_with(findings=["x"]), "malformed report: "),
         (_report_with(summary=[]), "malformed report: "),

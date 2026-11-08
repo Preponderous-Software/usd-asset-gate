@@ -22,6 +22,8 @@ from ..model import FAIL_ON_VALUES, Finding, Report
 
 REPORT_VERSION = 1
 
+_JSON_TYPES = {list: "array", str: "string", int: "number", float: "number", bool: "boolean", type(None): "null"}
+
 
 def to_dict(report: Report) -> dict[str, Any]:
     per_file = {path: 0 for path in report.files}
@@ -57,7 +59,8 @@ def from_dict(data: dict[str, Any]) -> Report:
     shaped like a report, so ``comment`` can exit 2 instead of failing with a traceback.
     """
     if not isinstance(data, dict):
-        raise ValueError(f"not a usd-asset-gate report (top level is a JSON {type(data).__name__})")
+        kind = _JSON_TYPES.get(type(data), type(data).__name__)
+        raise ValueError(f"not a usd-asset-gate report (top level is a JSON {kind})")
     if data.get("version") != REPORT_VERSION:
         raise ValueError(
             f"unsupported report version {data.get('version')!r} (expected {REPORT_VERSION})"
