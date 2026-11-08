@@ -301,6 +301,25 @@ def test_unreadable_report_exits_2(tmp_path):
     assert proc.returncode == 2
 
 
+@pytest.mark.parametrize(
+    "content",
+    [
+        "[]",
+        json.dumps({"version": 1, "files": ["a.usda"], "findings": [], "summary": {"fail_on": "error"}}),
+        json.dumps({"version": 1, "files": [], "findings": [], "summary": []}),
+        json.dumps({**json_report.to_dict(failing_report()), "summary": {"fail_on": "bogus"}}),
+    ],
+    ids=["array", "file-entry", "summary", "fail_on"],
+)
+def test_report_that_is_not_report_shaped_exits_2_without_a_traceback(tmp_path, content):
+    bad = tmp_path / "r.json"
+    bad.write_text(content)
+    proc = run_cli("comment", "--from", str(bad))
+    assert proc.returncode == 2
+    assert f"usd-asset-gate: error: cannot read report {bad}: " in proc.stderr
+    assert "Traceback" not in proc.stderr
+
+
 def test_context_from_issue_comment_event(tmp_path):
     event = tmp_path / "e.json"
     event.write_text(json.dumps({"issue": {"number": 9, "pull_request": {"url": "x"}}}))
