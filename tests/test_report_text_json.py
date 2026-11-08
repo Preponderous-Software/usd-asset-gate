@@ -234,10 +234,35 @@ def _report_with(**changes):
         (_report_with(files=["a.usda"]), "malformed report: "),
         (_report_with(findings=["x"]), "malformed report: "),
         (_report_with(summary=[]), "malformed report: "),
-        (_report_with(files=[{"path": "a.usda", "diagnostics": 3}]), "malformed report: "),
+        (
+            _report_with(files=[{"path": "a.usda", "diagnostics": 3}]),
+            "malformed report: 'diagnostics' of 'a.usda' is a JSON number, expected an array",
+        ),
+        (
+            _report_with(files=[{"path": "a.usda", "diagnostics": "text"}]),
+            "malformed report: 'diagnostics' of 'a.usda' is a JSON string, expected an array",
+        ),
+        (_report_with(files={}), "malformed report: 'files' is a JSON object, expected an array"),
+        (_report_with(files=""), "malformed report: 'files' is a JSON string, expected an array"),
+        (_report_with(findings={}), "malformed report: 'findings' is a JSON object, expected an array"),
+        (_report_with(findings=""), "malformed report: 'findings' is a JSON string, expected an array"),
         (_report_with(fail_on="bogus"), r"unknown fail_on 'bogus' \(expected one of: error, warning, info, never\)"),
     ],
-    ids=["array", "string", "null", "file-entry", "finding-entry", "summary", "diagnostics", "fail_on"],
+    ids=[
+        "array",
+        "string",
+        "null",
+        "file-entry",
+        "finding-entry",
+        "summary",
+        "diagnostics-number",
+        "diagnostics-string",
+        "files-object",
+        "files-string",
+        "findings-object",
+        "findings-string",
+        "fail_on",
+    ],
 )
 def test_json_from_dict_rejects_a_document_that_is_not_report_shaped(data, message):
     with pytest.raises(ValueError, match=message):
