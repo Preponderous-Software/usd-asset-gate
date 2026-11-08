@@ -215,6 +215,40 @@ def test_json_from_dict_rejects_other_versions():
         json_report.from_dict(data)
 
 
+def _report_with(**changes):
+    data = json_report.to_dict(Report(files=["a.usda"], findings=[FINDING], fail_on="error"))
+    for key, value in changes.items():
+        if key in ("files", "findings", "summary"):
+            data[key] = value
+        else:
+            data["summary"][key] = value
+    return data
+
+
+@pytest.mark.parametrize(
+    "data, message",
+    [
+        ([], "top level is a JSON list"),
+        ("report", "top level is a JSON str"),
+        (None, "top level is a JSON NoneType"),
+        (_report_with(files=["a.usda"]), "malformed report: "),
+        (_report_with(findings=["x"]), "malformed report: "),
+        (_report_with(summary=[]), "malformed report: "),
+        (_report_with(files=[{"path": "a.usda", "diagnostics": 3}]), "malformed report: "),
+        (_report_with(fail_on="bogus"), r"unknown fail_on 'bogus' \(expected one of: error, warning, info, never\)"),
+    ],
+    ids=["array", "string", "null", "file-entry", "finding-entry", "summary", "diagnostics", "fail_on"],
+)
+def test_json_from_dict_rejects_a_document_that_is_not_report_shaped(data, message):
+    with pytest.raises(ValueError, match=message):
+        json_report.from_dict(data)
+
+
+def test_json_from_dict_accepts_every_fail_on_value():
+    for value in ("error", "warning", "info", "never"):
+        assert json_report.from_dict(_report_with(fail_on=value)).fail_on == value
+
+
 def test_json_from_dict_defaults_missing_diagnostics():
     data = json_report.to_dict(Report(files=["a.usda"], findings=[]))
     del data["files"][0]["diagnostics"]

@@ -18,7 +18,7 @@ import json
 from typing import Any
 
 from .. import __version__
-from ..model import Finding, Report
+from ..model import FAIL_ON_VALUES, Finding, Report
 
 REPORT_VERSION = 1
 
@@ -51,14 +51,28 @@ def render(report: Report) -> str:
 
 
 def from_dict(data: dict[str, Any]) -> Report:
-    """Rebuild a ``Report`` from :func:`to_dict` output (used by ``comment``)."""
+    """Rebuild a ``Report`` from :func:`to_dict` output (used by ``comment``).
+
+    Raises ``ValueError`` (or ``KeyError`` for a missing field) when ``data`` is not
+    shaped like a report, so ``comment`` can exit 2 instead of failing with a traceback.
+    """
+    if not isinstance(data, dict):
+        raise ValueError(f"not a usd-asset-gate report (top level is a JSON {type(data).__name__})")
     if data.get("version") != REPORT_VERSION:
         raise ValueError(
             f"unsupported report version {data.get('version')!r} (expected {REPORT_VERSION})"
         )
-    return Report(
-        files=[entry["path"] for entry in data["files"]],
-        findings=[Finding.from_dict(f) for f in data["findings"]],
-        fail_on=data["summary"]["fail_on"],
-        diagnostics={e["path"]: list(e.get("diagnostics", [])) for e in data["files"]},
-    )
+    try:
+        report = Report(
+            files=[entry["path"] for entry in data["files"]],
+            findings=[Finding.from_dict(f) for f in data["findings"]],
+            fail_on=data["summary"]["fail_on"],
+            diagnostics={e["path"]: list(e.get("diagnostics", [])) for e in data["files"]},
+        )
+    except (TypeError, AttributeError) as exc:
+        raise ValueError(f"malformed report: {exc}") from None
+    if report.fail_on not in FAIL_ON_VALUES:
+        raise ValueError(
+            f"unknown fail_on {report.fail_on!r} (expected one of: {', '.join(FAIL_ON_VALUES)})"
+        )
+    return report
