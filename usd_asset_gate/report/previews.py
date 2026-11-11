@@ -8,14 +8,32 @@ from __future__ import annotations
 
 import json
 
+from .json import _json_kind
+
 HEADING = "### Visual changes (advisory)"
 
 
 def load(path: str) -> dict:
+    """Read a ``preview --json`` document.
+
+    Raises ``ValueError`` when the document is not one :func:`render` can draw, so
+    ``comment --previews`` exits 2 before any HTTP call instead of failing with a traceback.
+    """
     with open(path, encoding="utf-8") as fh:
         doc = json.load(fh)
     if not isinstance(doc, dict) or "files" not in doc:
         raise ValueError("not a usd-asset-gate previews document (no 'files')")
+    if not isinstance(doc["files"], list):
+        raise ValueError(
+            f"malformed previews document: 'files' is a JSON {_json_kind(doc['files'])}, "
+            "expected an array"
+        )
+    try:
+        render(doc)
+    except KeyError as exc:
+        raise ValueError(f"malformed previews document: missing field {exc}") from None
+    except (TypeError, AttributeError, ValueError) as exc:
+        raise ValueError(f"malformed previews document: {exc}") from None
     return doc
 
 

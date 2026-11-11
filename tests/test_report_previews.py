@@ -7,6 +7,7 @@ as part of the numpy-backed pipeline.
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
@@ -51,6 +52,61 @@ def test_load_rejects_a_document_without_files(tmp_path, content):
     path.write_text(json.dumps(content), encoding="utf-8")
     with pytest.raises(ValueError, match="no 'files'"):
         previews.load(str(path))
+
+
+@pytest.mark.parametrize(
+    "doc, message",
+    [
+        (_doc("a.usda"), "'files' is a JSON string, expected an array"),
+        (_doc({}), "'files' is a JSON object, expected an array"),
+        (_doc(None), "'files' is a JSON null, expected an array"),
+        (_doc(["a.usda"]), "malformed previews document: "),
+        (_doc([{"change": "added"}]), "missing field 'path'"),
+        (_doc([_rendered("a.usda", [{"pixels_over": 1}])]), "missing field 'fraction_over'"),
+        (_doc([_rendered("a.usda", [{"pixels_over": 1, "fraction_over": 0.1}])]), "missing field 'max_delta_e'"),
+        (_doc([_rendered("a.usda", [{"size": 1}])]), "missing field 'name'"),
+        (_doc([_rendered("a.usda", ["front"])]), "malformed previews document: "),
+        (_doc([_rendered("a.usda", [])], settings={"threshold": "x"}), "malformed previews document: "),
+        (_doc([_rendered("a.usda", [])], settings=[]), "malformed previews document: "),
+        (_doc([_rendered("a.usda", [])], renderer="0.6.0"), "malformed previews document: "),
+        (_doc([{"path": "a.usda", "status": None}]), "malformed previews document: "),
+    ],
+    ids=[
+        "files-string",
+        "files-object",
+        "files-null",
+        "entry-string",
+        "entry-no-path",
+        "view-no-fraction",
+        "view-no-max-delta-e",
+        "view-no-name",
+        "view-string",
+        "threshold-string",
+        "settings-array",
+        "renderer-string",
+        "status-null",
+    ],
+)
+def test_load_rejects_a_document_render_cannot_draw(tmp_path, doc, message):
+    path = tmp_path / "previews.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    with pytest.raises(ValueError, match=re.escape(message)):
+        previews.load(str(path))
+
+
+@pytest.mark.parametrize(
+    "doc",
+    [
+        _doc([_rendered("a.usda", [{"name": "top", "pixels_over": 2, "fraction_over": 0.5, "max_delta_e": 9.0}])]),
+        _doc([{"path": "b.usda", "change": "added", "message": "boom"}], settings={}, renderer=None),
+        {"status": "unavailable", "message": "no libstrata.so", "files": []},
+    ],
+    ids=["rendered", "error-entry", "unavailable"],
+)
+def test_load_accepts_documents_render_can_draw(tmp_path, doc):
+    path = tmp_path / "previews.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    assert previews.load(str(path)) == doc
 
 
 # --- render ---------------------------------------------------------------------------
