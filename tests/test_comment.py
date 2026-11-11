@@ -320,6 +320,27 @@ def test_report_that_is_not_report_shaped_exits_2_without_a_traceback(tmp_path, 
     assert "Traceback" not in proc.stderr
 
 
+@pytest.mark.parametrize(
+    "content",
+    [
+        {"files": "a.usda"},
+        {"files": [{"change": "added"}]},
+        {"files": [{"path": "a.usda", "status": "rendered", "views": [{"pixels_over": 1}]}]},
+        {"files": [{"path": "a.usda"}], "settings": {"threshold": "x"}},
+    ],
+    ids=["files-string", "entry-no-path", "view-no-numbers", "threshold-string"],
+)
+def test_previews_that_are_not_previews_shaped_exit_2_before_any_request(api, tmp_path, content):
+    report = write_report(tmp_path, failing_report())
+    bad = tmp_path / "previews.json"
+    bad.write_text(json.dumps(content))
+    proc = run_cli("comment", "--from", report, "--previews", str(bad), env=cli_env(api, tmp_path))
+    assert proc.returncode == 2
+    assert f"usd-asset-gate: error: cannot read previews {bad}: malformed previews document: " in proc.stderr
+    assert "Traceback" not in proc.stderr
+    assert api.requests == []
+
+
 def test_context_from_issue_comment_event(tmp_path):
     event = tmp_path / "e.json"
     event.write_text(json.dumps({"issue": {"number": 9, "pull_request": {"url": "x"}}}))
