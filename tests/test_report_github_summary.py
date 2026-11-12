@@ -237,6 +237,84 @@ def test_summary_budget_covers_many_distinct_files():
     assert len(tiny.encode("utf-8")) <= 300
 
 
+# --- summary helpers and render options ------------------------------------------
+
+
+def test_summary_cell_escapes_backslashes_before_pipes_and_flattens_crlf():
+    assert summary.cell("a\\b\r\nc|d") == "a\\\\b  c\\|d"
+
+
+def test_summary_code_uses_a_double_fence_around_backticks():
+    assert summary.code("a.usda") == "`a.usda`"
+    assert summary.code("a`b") == "`` a`b ``"
+    assert summary.code("x|y\nz") == "`x\\|y z`"
+
+
+def test_summary_headline_verdict_follows_fail_on_and_pluralises():
+    err = Finding(rule="r", code="C", severity=Severity.ERROR, file="a.usda", message="m")
+    warn = Finding(rule="r", code="C", severity=Severity.WARNING, file="a.usda", message="m")
+    assert summary.headline(Report(files=["a.usda"], findings=[err], fail_on="never")) == (
+        "✅ **PASS** — 1 USD file checked: 1 error(s), 0 warning(s), 0 info (fail_on: `never`)"
+    )
+    assert summary.headline(
+        Report(files=["a.usda", "b.usda"], findings=[warn], fail_on="warning")
+    ) == "❌ **FAIL** — 2 USD files checked: 0 error(s), 1 warning(s), 0 info (fail_on: `warning`)"
+
+
+def test_summary_counts_clean_files_in_the_plural():
+    text = summary.render(Report(files=["a.usda", "b.usda"], findings=[]))
+    assert "2 files with no findings.\n" in text
+
+
+def test_summary_where_cell_with_a_line_but_no_prim():
+    f = Finding(rule="r", code="C", severity=Severity.ERROR, file="a.usda", message="m", line=5)
+    text = summary.render(Report(files=["a.usda"], findings=[f]))
+    assert "| 🔴 error | `a.usda` | line 5  | `r` | m (`C`) |\n" in text
+
+
+def test_summary_title_and_overflow_hint_are_used():
+    many = [
+        Finding(rule="r", code="C", severity=Severity.ERROR, file="a.usda", message="m" * 200 + str(i))
+        for i in range(500)
+    ]
+    text = summary.render(
+        Report(files=["a.usda"], findings=many),
+        max_bytes=20_000,
+        title="### Custom",
+        overflow_hint="the log",
+    )
+    assert text.startswith("### Custom\n\n❌ **FAIL**")
+    assert "not shown to stay under the size limit; see the log._" in text
+    assert "the JSON report" not in text
+
+
+def test_summary_falls_back_to_the_headline_when_no_table_fits():
+    f = Finding(rule="r", code="C", severity=Severity.ERROR, file="a.usda", message="m")
+    report = Report(files=["a.usda"], findings=[f])
+    expected = (
+        "## USD asset gate\n\n"
+        + summary.headline(report)
+        + "\n\n_Details omitted to stay under the size limit; "
+        "see the JSON report and the job log._\n"
+    )
+    assert summary.render(report, max_bytes=len(expected.encode("utf-8"))) == expected
+
+
+def test_summary_fallback_never_splits_a_utf8_character():
+    f = Finding(rule="r", code="C", severity=Severity.ERROR, file="a.usda", message="m")
+    # 19 bytes of title and blank line, then the 3-byte ❌: a 20-byte budget cuts into it.
+    assert summary.render(Report(files=["a.usda"], findings=[f]), max_bytes=20) == (
+        "## USD asset gate\n\n"
+    )
+
+
+def test_summary_append_to_adds_a_missing_final_newline_only(tmp_path):
+    target = tmp_path / "step_summary.md"
+    summary.append_to(str(target), "first")
+    summary.append_to(str(target), "second\n")
+    assert target.read_text(encoding="utf-8") == "first\nsecond\n"
+
+
 NESTED = """#usda 1.0
 (
     defaultPrim = "A"
