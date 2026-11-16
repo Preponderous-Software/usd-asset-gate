@@ -203,3 +203,65 @@ def test_dangling_symlink_is_reported_as_stage_open_failure(tmp_path, monkeypatc
     config = cfg.parse({"rules": {"file-size": {"max_bytes": "1MB"}}})
     report = Runner(config).run(["gone.usda"])
     assert [(f.rule, f.code) for f in report.findings] == [("stage-open", "StageOpenFailed")]
+
+
+@pytest.mark.parametrize(
+    "n, expected",
+    [
+        (0, "0 B"),
+        (999, "999 B"),
+        (1000, "1.0 KB"),
+        (1024, "1.0 KB"),
+        (1500, "1.5 KB"),
+        (1_000_000, "1.0 MB"),
+        (2_500_000_000, "2.5 GB"),
+    ],
+)
+def test_human_uses_si_units_with_one_decimal(n, expected):
+    assert file_size.human(n) == expected
+
+
+@pytest.mark.parametrize("value", [True, "1.5", "5 TB", ""])
+def test_parse_size_rejects_booleans_and_unitless_or_unknown_sizes(value):
+    with pytest.raises(ValueError, match="not a size"):
+        file_size.parse_size(value)
+
+
+def test_parse_size_ignores_surrounding_whitespace():
+    assert file_size.parse_size("  7 MB  ") == 7_000_000
+
+
+def test_no_applicable_limit_skips_the_stat(tmp_path):
+    # The path does not exist, so any os.stat call would fail; no limit means none is made.
+    ctx = AssetContext(path="x.usda", abs_path=str(tmp_path / "missing.usda"))
+    assert file_size.check_before_open(ctx, {}) == []
+    assert file_size.check_before_open(ctx, {"max_bytes": {".usdz": "1B"}}) == []
+
+
+def test_oversize_finding_names_both_sizes_in_bytes(tmp_path):
+    f = tmp_path / "x.usda"
+    f.write_bytes(b"#" * 150)
+    ctx = AssetContext(path="assets/x.usda", abs_path=str(f))
+    (finding,) = file_size.check_before_open(ctx, {"max_bytes": 100})
+    assert (finding.rule, finding.code, finding.severity) == ("file-size", "FileTooLarge", Severity.ERROR)
+    assert finding.file == "assets/x.usda" and finding.prim_path is None
+    assert finding.message == (
+        "file is 150 B (150 bytes); the limit is 100 B (100 bytes). The stage was not opened."
+    )
+
+
+def test_oversize_severity_override_applies(tmp_path):
+    f = tmp_path / "x.usda"
+    f.write_bytes(b"#" * 150)
+    ctx = AssetContext(path="x.usda", abs_path=str(f))
+    (finding,) = file_size.check_before_open(ctx, {"max_bytes": 100, "severity": "warning"})
+    assert finding.severity is Severity.WARNING
+
+
+def test_per_extension_limit_is_applied_before_open(tmp_path):
+    f = tmp_path / "x.usdz"
+    f.write_bytes(b"#" * 150)
+    ctx = AssetContext(path="x.usdz", abs_path=str(f))
+    limits = {"default": "1KB", ".usdz": "100B"}
+    assert [x.code for x in file_size.check_before_open(ctx, {"max_bytes": limits})] == ["FileTooLarge"]
+    assert file_size.check_before_open(ctx, {"max_bytes": {"default": "1KB"}}) == []
