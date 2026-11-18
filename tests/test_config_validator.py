@@ -7,6 +7,7 @@ regression names the keyword rather than a config file.
 
 from __future__ import annotations
 
+import datetime
 import math
 
 import pytest
@@ -135,6 +136,50 @@ def test_any_of_reports_the_error_of_the_option_with_the_same_type():
 
 def test_any_of_without_a_same_type_option_reports_the_value():
     assert error("s", ANY_OF, "k") == 'k: "s" is not a valid value'
+
+
+# --- required ------------------------------------------------------------------
+
+
+def test_required_key_is_named_under_its_parent():
+    schema = {"type": "object", "required": ["paths"]}
+    assert error({}, schema, "overrides[0]") == "overrides[0].paths: required key is missing"
+    assert error({}, schema) == "paths: required key is missing"
+
+
+def test_required_is_checked_before_unknown_keys():
+    schema = {"type": "object", "additionalProperties": False, "required": ["paths"]}
+    assert error({"nope": 1}, schema, "o") == "o.paths: required key is missing"
+
+
+# --- YAML values that are not JSON ---------------------------------------------
+# yaml.safe_load turns an unquoted 2026-01-02 into a datetime.date.
+
+DAY = datetime.date(2026, 1, 2)
+
+
+def test_a_non_json_value_is_named_by_its_python_type():
+    assert error(DAY, {"type": "string"}, "s") == "s: expected string, got date"
+
+
+def test_messages_show_a_non_json_value_as_its_string():
+    assert error(DAY, {"enum": ["a"]}, "k") == "k: '2026-01-02' is not one of \"a\""
+    assert error(DAY, ANY_OF, "k") == "k: '2026-01-02' is not a valid value"
+    # JSON-representable values are still shown as JSON
+    assert error(None, {"enum": ["a"]}) == '(top level): null is not one of "a"'
+
+
+def test_a_non_string_key_that_is_not_an_index_is_joined_with_a_dot():
+    assert error({DAY: 1}, {"type": "object"}, "rules") == "rules.2026-01-02: keys must be strings"
+    assert error({DAY: 1}, {"type": "object"}) == "2026-01-02: keys must be strings"
+
+
+def test_a_yaml_date_in_a_config_file_is_named_by_key(tmp_path):
+    path = tmp_path / "gate.yml"
+    path.write_text("exclude: [2026-01-02]\n", encoding="utf-8")
+    with pytest.raises(ConfigError) as exc:
+        cfg.load(str(path))
+    assert str(exc.value) == f"{path}: exclude[0]: expected string, got date"
 
 
 # --- check_upstream_names ------------------------------------------------------
